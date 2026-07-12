@@ -12,6 +12,7 @@ import "./ui/app.css";
 import { createMap } from "./map";
 import { initMarkers } from "./map/markers";
 import { initPlacement } from "./map/placement";
+import { initPosteriorLayer } from "./map/posteriorLayer";
 import { initWedge } from "./map/wedge";
 import { initRays } from "./map/rays";
 import { initScaleBar } from "./map/scalebar";
@@ -22,6 +23,7 @@ import { initSpreadControl } from "./ui/components/spreadControl";
 import { initNodeList } from "./ui/NodeList";
 import { initPanelMeta } from "./ui/panelMeta";
 import { initSelectedNode } from "./ui/SelectedNode";
+import { initReadout } from "./ui/Readout";
 import { store } from "./store";
 
 // Restore a persisted theme choice before the map mounts so the first basemap
@@ -37,8 +39,10 @@ const statusChip = document.getElementById("statusChip");
 if (statusChip) initOfflineChip(statusChip);
 
 // --- v2: placeable map -------------------------------------------------------
-// Direction layers first so they sit UNDER the markers (overlay pane): the σ wedge
-// under the bearing rays under the markers. All geo-anchored via the ENU core.
+// The posterior heatmap sits in its own pane (z 350) beneath everything; then the
+// direction layers (overlay pane) — σ wedge under rays — under the markers. All
+// geo-anchored via the ENU core.
+initPosteriorLayer(map, store);
 initWedge(map, store);
 initRays(map, store);
 initMarkers(map, store);
@@ -53,6 +57,10 @@ if (panelControls) {
   initIndicatorPicker(panelControls, store);
   initSpreadControl(panelControls, store);
 }
+
+// Candidate-area readout (honest posterior summary) — above the selected-node card.
+const readout = document.getElementById("readout");
+if (readout) initReadout(readout, store);
 
 // Selected node · bearing card (compass-ring dial + editable azimuth/σ).
 const selectedNode = document.getElementById("selectedNode");
