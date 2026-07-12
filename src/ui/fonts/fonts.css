@@ -1,0 +1,78 @@
+/*
+ * Self-hosted webfonts — Backtrace is offline-first, so no CDN / network font
+ * requests are allowed. The woff2 files in this folder are vendored from the
+ * @fontsource packages (Inter, JetBrains Mono — both SIL Open Font License),
+ * subset to the latin range and the 400/500/600/700 weights the UI uses.
+ *
+ * Inter    -> --font-ui   (all interface text)
+ * JetBrains Mono -> --font-data (all numerics; tabular figures, see .num helper)
+ *
+ * Vite fingerprints these URLs and inlines/bundles the files at build time, so
+ * the app resolves them from its own origin only.
+ */
+
+/* ---- Inter (UI) ---- */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./inter-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./inter-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./inter-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./inter-700.woff2") format("woff2");
+}
+
+/* ---- JetBrains Mono (data / numerics) ----
+   font-feature-settings pins tabular figures ("tnum") so columns of numbers
+   align. The .num helper in tokens.css also sets font-variant-numeric. */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  font-feature-settings: "tnum" 1;
+  src: url("./jetbrains-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  font-feature-settings: "tnum" 1;
+  src: url("./jetbrains-mono-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  font-feature-settings: "tnum" 1;
+  src: url("./jetbrains-mono-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  font-feature-settings: "tnum" 1;
+  src: url("./jetbrains-mono-700.woff2") format("woff2");
+}

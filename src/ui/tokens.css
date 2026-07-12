@@ -1,0 +1,37 @@
+/*
+ * Design tokens — placeholder.
+ *
+ * Stage 2 of UPDATELOGV1.md ports the mockup's full token system here verbatim
+ * (the :root dark defaults, the light overrides, the type/radius/motion scales,
+ * and the .num / .eyebrow helpers). For Stage 1 this only wires the self-hosted
+ * font families so the shell resolves to Inter / JetBrains Mono with no network
+ * font requests.
+ */
+@import "./fonts/fonts.css";
+
+:root {
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "Cascadia Code", "SFMono-Regular",
+    Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+}
+
+/* Numeric helper — tabular figures, monospace. Stage 2 expands this. */
+.num {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
