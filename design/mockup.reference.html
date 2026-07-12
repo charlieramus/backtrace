@@ -1,0 +1,754 @@
+<title>Backtrace — v0 UI mockup</title>
+<style>
+  /* Fonts are specified by intent; the Artifact CSP blocks webfont CDNs, so these
+     fall back to the closest system faces (Segoe UI / Consolas on Windows). In the
+     real build, Inter + JetBrains Mono are self-hosted. */
+  :root{
+    --bg:#0f0e0d;
+    --surface-1:#1b1815;
+    --surface-2:#262019;
+    --border:rgba(255,240,230,.09);
+    --border-strong:rgba(255,240,230,.16);
+    --text:#f0ebe4;
+    --text-muted:#a39a8c;
+    --text-faint:#726a5f;
+    --accent:#ff7a45;      /* ember */
+    --accent-hi:#ff9a70;
+    --accent-dim:rgba(255,122,69,.14);
+    /* muted-purple posterior ramp */
+    --post-lo:#2a2140;
+    --post-mid:#5b4b8a;
+    --post-hi:#8b7bc4;
+    --post-ink:#a99cd6;
+    --sand:#e7d8b4;        /* HDR contour lines */
+    /* Okabe-Ito indicator colors (colorblind-safe) */
+    --ind-char:#e24a33;
+    --ind-stain:#e69f00;
+    --ind-prot:#56b4e9;
+    --ind-soot:#009e73;
+    --ind-ash:#cc79a7;
+    --ind-grass:#0072b2;
+    --ok:#5fbf8f;
+
+    /* semantic elevation overlays (flip per theme) */
+    --fill-1:rgba(255,240,230,.03);
+    --fill-2:rgba(255,240,230,.06);
+    --fill-strong:rgba(255,240,230,.09);
+    --inset:rgba(0,0,0,.25);
+    --hover:rgba(255,240,230,.06);
+    --vignette:rgba(0,0,0,.45);
+    --scroll:rgba(255,240,230,.12);
+
+    --panel-w:340px;
+    --r-xs:6px; --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:28px; --r-full:999px;
+    --font-ui:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --font-data:"JetBrains Mono",ui-monospace,"Cascadia Code","SFMono-Regular",Consolas,monospace;
+    --ease:cubic-bezier(.22,1,.36,1);
+    --dur-fast:120ms; --dur-base:220ms;
+    --sh-1:0 1px 2px rgba(0,0,0,.4);
+    --sh-2:0 10px 30px -8px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+    --sh-3:0 24px 60px -12px rgba(0,0,0,.7);
+  }
+
+  /* ---- LIGHT THEME (warm paper, to match a light basemap) ---- */
+  :root[data-theme="light"]{ color-scheme:light;
+    --bg:#f4efe7; --surface-1:#fffdf9; --surface-2:#efe8dc;
+    --border:rgba(60,45,30,.14); --border-strong:rgba(60,45,30,.24);
+    --text:#241f19; --text-muted:#6d6252; --text-faint:#9a8f7e;
+    --accent:#d95a28; --accent-hi:#b8481c; --accent-dim:rgba(217,90,40,.12); --post-ink:#6a58a0;
+    --fill-1:rgba(40,25,10,.035); --fill-2:rgba(40,25,10,.06); --fill-strong:rgba(40,25,10,.10);
+    --inset:rgba(40,25,10,.05); --hover:rgba(40,25,10,.06);
+    --vignette:rgba(90,70,45,.10); --scroll:rgba(40,25,10,.18);
+    --sh-1:0 1px 2px rgba(60,45,30,.12);
+    --sh-2:0 10px 30px -8px rgba(60,45,30,.20),0 2px 8px rgba(60,45,30,.10);
+    --sh-3:0 24px 60px -12px rgba(60,45,30,.24);
+  }
+  @media (prefers-color-scheme:light){
+    :root:not([data-theme]){ color-scheme:light;
+      --bg:#f4efe7; --surface-1:#fffdf9; --surface-2:#efe8dc;
+      --border:rgba(60,45,30,.14); --border-strong:rgba(60,45,30,.24);
+      --text:#241f19; --text-muted:#6d6252; --text-faint:#9a8f7e;
+      --accent:#d95a28; --accent-hi:#b8481c; --accent-dim:rgba(217,90,40,.12); --post-ink:#6a58a0;
+      --fill-1:rgba(40,25,10,.035); --fill-2:rgba(40,25,10,.06); --fill-strong:rgba(40,25,10,.10);
+      --inset:rgba(40,25,10,.05); --hover:rgba(40,25,10,.06);
+      --vignette:rgba(90,70,45,.10); --scroll:rgba(40,25,10,.18);
+      --sh-1:0 1px 2px rgba(60,45,30,.12);
+      --sh-2:0 10px 30px -8px rgba(60,45,30,.20),0 2px 8px rgba(60,45,30,.10);
+      --sh-3:0 24px 60px -12px rgba(60,45,30,.24);
+    }
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--font-ui); font-size:15px; line-height:1.45;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .num{font-family:var(--font-data); font-variant-numeric:tabular-nums; letter-spacing:-.01em}
+  .eyebrow{
+    font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--text-faint);
+  }
+  button{font-family:inherit; color:inherit; cursor:pointer}
+
+  /* ---------- app frame ---------- */
+  .app{position:fixed; inset:0}
+  #map{position:absolute; inset:0; width:100%; height:100%; display:block}
+  .map-vignette{
+    position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(120% 100% at 50% 40%,transparent 55%,var(--vignette) 100%);
+  }
+
+  .overlay{position:absolute; inset:0; pointer-events:none}
+  .overlay > *{pointer-events:auto}
+
+  /* frosted surface mixin */
+  .frost{
+    background:color-mix(in srgb,var(--surface-1) 80%,transparent);
+    backdrop-filter:blur(18px) saturate(1.35);
+    -webkit-backdrop-filter:blur(18px) saturate(1.35);
+    border:1px solid var(--border);
+    box-shadow:var(--sh-2);
+  }
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    position:absolute; top:18px; left:18px; display:flex; align-items:center; gap:6px;
+    padding:8px; border-radius:var(--r-lg);
+  }
+  .brand{display:flex; align-items:center; gap:10px; padding:4px 12px 4px 6px}
+  .mark{
+    width:30px; height:30px; border-radius:var(--r-sm); flex:none; position:relative;
+    background:radial-gradient(120% 120% at 30% 20%,var(--accent-hi),var(--accent) 55%,#c74e22);
+    box-shadow:0 0 0 1px rgba(255,154,112,.4),0 4px 14px -2px rgba(255,122,69,.5);
+  }
+  .mark::after{
+    content:""; position:absolute; inset:0; border-radius:inherit;
+    background:
+      radial-gradient(4px 4px at 62% 62%,rgba(15,14,13,.9) 60%,transparent 62%),
+      conic-gradient(from 210deg at 38% 38%,transparent 0 38%,rgba(15,14,13,.85) 38% 50%,transparent 50%);
+  }
+  .brand b{font-size:15px; font-weight:700; letter-spacing:.02em}
+  .brand span{display:block; font-size:10.5px; color:var(--text-muted); letter-spacing:.16em; text-transform:uppercase; margin-top:-2px}
+  .tdiv{width:1px; height:24px; background:var(--border); margin:0 4px}
+
+  .tbtn{
+    display:inline-flex; align-items:center; gap:7px; height:34px; padding:0 12px;
+    border-radius:var(--r-sm); border:1px solid transparent; background:transparent;
+    color:var(--text); font-size:13.5px; font-weight:500;
+    transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease);
+  }
+  .tbtn:hover{background:var(--hover); border-color:var(--border)}
+  .tbtn svg{width:15px; height:15px; opacity:.85}
+  .tbtn.primary{background:var(--accent-dim); color:var(--accent-hi); border-color:rgba(255,122,69,.32)}
+  .tbtn.primary:hover{background:rgba(255,122,69,.2)}
+  .tbtn:focus-visible,.node:focus-visible,.iconbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  /* ---------- status chip ---------- */
+  .topright{position:absolute; top:18px; right:calc(var(--panel-w) + 30px); display:flex; align-items:center; gap:8px}
+  .status{
+    display:flex; align-items:center; gap:8px;
+    padding:8px 14px; border-radius:var(--r-full); font-size:12.5px; color:var(--text-muted);
+  }
+  .status .dot{width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px rgba(95,191,143,.16)}
+  .theme-toggle{
+    width:38px; height:38px; border-radius:var(--r-full); flex:none;
+    display:grid; place-items:center; color:var(--text-muted);
+    transition:color var(--dur-fast) var(--ease);
+  }
+  .theme-toggle:hover{color:var(--accent-hi)}
+  .theme-toggle:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .theme-toggle .ico{width:18px; height:18px; display:block}
+  /* dark (default): show sun = "switch to light"; light: show moon */
+  .theme-toggle .ico-moon{display:none}
+  :root[data-theme="light"] .theme-toggle .ico-sun{display:none}
+  :root[data-theme="light"] .theme-toggle .ico-moon{display:block}
+  @media (prefers-color-scheme:light){
+    :root:not([data-theme]) .theme-toggle .ico-sun{display:none}
+    :root:not([data-theme]) .theme-toggle .ico-moon{display:block}
+  }
+
+  /* ---------- north + scale ---------- */
+  .compass-n{
+    position:absolute; top:70px; right:calc(var(--panel-w) + 30px); width:40px; height:40px; border-radius:var(--r-full);
+    display:grid; place-items:center; color:var(--text-muted);
+  }
+  .compass-n b{font-size:11px; font-weight:700; color:var(--text)}
+  .compass-n svg{position:absolute; width:22px; height:22px; top:6px}
+  .scale{
+    position:absolute; left:18px; bottom:18px; display:flex; flex-direction:column; gap:5px;
+    padding:9px 12px; border-radius:var(--r-md); font-size:11px; color:var(--text-muted);
+  }
+  .scale .bar{display:flex; align-items:flex-end; gap:0; height:9px}
+  .scale .bar i{display:block; width:34px; height:9px; border:1px solid var(--border-strong); border-right:none}
+  .scale .bar i:nth-child(odd){background:var(--fill-2)}
+  .scale .bar i:last-child{border-right:1px solid var(--border-strong)}
+
+  /* ---------- legend ---------- */
+  .legend{
+    position:absolute; left:18px; bottom:88px; width:236px; border-radius:var(--r-md);
+    padding:13px 14px; display:flex; flex-direction:column; gap:11px;
+  }
+  .legend .row{display:flex; gap:14px; flex-wrap:wrap}
+  .legend .lg{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-muted)}
+  .legend .shp{width:12px; height:12px; flex:none; color:var(--text)}
+  .bands{display:flex; height:10px; border-radius:var(--r-full); overflow:hidden; border:1px solid var(--border)}
+  .bands i{flex:1}
+  .band-lbl{display:flex; justify-content:space-between; font-size:10px; color:var(--text-faint)}
+  .legend .note{font-size:11px; color:var(--text-faint); line-height:1.4}
+  .legend .note b{color:var(--post-ink); font-weight:600}
+
+  /* ---------- right panel ---------- */
+  .panel{
+    position:absolute; top:18px; right:18px; bottom:18px; width:var(--panel-w);
+    border-radius:var(--r-lg); display:flex; flex-direction:column; overflow:hidden;
+    box-shadow:var(--sh-3);
+  }
+  .panel-scroll{overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:14px}
+  .panel-scroll::-webkit-scrollbar{width:8px}
+  .panel-scroll::-webkit-scrollbar-thumb{background:var(--scroll); border-radius:var(--r-full)}
+
+  .p-head{display:flex; flex-direction:column; gap:3px}
+  .p-head h1{margin:0; font-size:18px; font-weight:650; letter-spacing:-.01em; text-wrap:balance}
+  .p-head .meta{font-size:12px; color:var(--text-muted)}
+  .p-head .meta .num{color:var(--text)}
+  .p-tag{
+    margin-top:4px; font-size:11.5px; color:var(--text-muted); line-height:1.45;
+    padding:8px 10px; border-radius:var(--r-sm); background:var(--fill-1); border:1px solid var(--border);
+  }
+  .p-tag b{color:var(--accent-hi); font-weight:600}
+
+  .card{
+    border-radius:var(--r-md); border:1px solid var(--border); background:var(--fill-1);
+    padding:14px;
+  }
+  .card .clab{display:flex; justify-content:space-between; align-items:baseline}
+  .area{display:flex; align-items:baseline; gap:6px; margin-top:6px}
+  .area .v{font-size:32px; font-weight:600; line-height:1}
+  .area .u{font-size:15px; color:var(--text-muted)}
+  .metric{margin-top:14px}
+  .metric .ml{display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px}
+  .metric .ml span:last-child{color:var(--text-muted)}
+  .meter{height:7px; border-radius:var(--r-full); background:var(--fill-strong); overflow:hidden}
+  .meter i{display:block; height:100%; border-radius:inherit;
+    background:linear-gradient(90deg,var(--accent),var(--accent-hi));}
+  .chips{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:var(--r-full);
+    font-size:11.5px; border:1px solid var(--border); background:var(--fill-1); color:var(--text-muted);
+  }
+  .chip .d{width:7px; height:7px; border-radius:50%; background:var(--ok)}
+  .chip .num{color:var(--text); font-weight:600}
+
+  /* ---------- compass block ---------- */
+  .selnode{display:flex; gap:14px; align-items:center}
+  .compass-wrap{width:120px; height:120px; flex:none; position:relative}
+  .compass-wrap svg{width:100%; height:100%; display:block}
+  .selfields{flex:1; min-width:0; display:flex; flex-direction:column; gap:9px}
+  .field{display:flex; flex-direction:column; gap:3px}
+  .field label{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint)}
+  .field .val{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:7px 10px; border-radius:var(--r-sm); border:1px solid var(--border);
+    background:var(--inset); font-size:13px;
+  }
+  .field .val .num{font-size:14px}
+  .field .val small{color:var(--text-faint); font-size:11px}
+  .drag-hint{font-size:10.5px; color:var(--text-faint); display:flex; align-items:center; gap:5px}
+
+  /* ---------- node list ---------- */
+  .nodes-h{display:flex; justify-content:space-between; align-items:center}
+  .nodes-h .eyebrow{color:var(--text-muted)}
+  .nodes{display:flex; flex-direction:column; gap:7px}
+  .node{
+    display:flex; align-items:center; gap:11px; padding:10px 11px; border-radius:var(--r-md);
+    border:1px solid var(--border); background:var(--fill-1); text-align:left; width:100%;
+    transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease);
+  }
+  .node:hover{background:var(--hover); transform:translateX(-2px)}
+  .node.sel{border-color:rgba(255,122,69,.5); background:var(--accent-dim)}
+  .node .glyph{width:22px; height:22px; flex:none; display:grid; place-items:center}
+  .node .nb{flex:1; min-width:0}
+  .node .nt{font-size:13.5px; font-weight:550; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .node .ns{font-size:11px; color:var(--text-muted); display:flex; gap:8px}
+  .node .ns .sp{text-transform:capitalize}
+  .node .sig{font-size:12px; color:var(--text-muted)}
+  .node .sig b{color:var(--text); font-weight:600}
+  .iconbtn{
+    width:26px; height:26px; border-radius:var(--r-sm); border:1px solid transparent; background:transparent;
+    color:var(--text-faint); display:grid; place-items:center; flex:none;
+  }
+  .iconbtn:hover{background:rgba(226,74,51,.14); color:#ff8f7a}
+  .iconbtn svg{width:14px; height:14px}
+
+  .addrow{
+    display:flex; align-items:center; justify-content:center; gap:8px; padding:11px; width:100%;
+    border-radius:var(--r-md); border:1px dashed var(--border-strong); background:transparent;
+    color:var(--text-muted); font-size:13px; font-weight:500;
+    transition:border-color var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease);
+  }
+  .addrow:hover{border-color:var(--accent); color:var(--accent-hi)}
+
+  .load-fade{animation:rise var(--dur-base) var(--ease) both}
+  .toolbar{animation:rise var(--dur-base) var(--ease) both}
+  .status,.legend,.scale,.compass-n{animation:fade 320ms var(--ease) both}
+  @keyframes rise{from{opacity:0; transform:translateY(-8px)} to{opacity:1; transform:none}}
+  @keyframes fade{from{opacity:0} to{opacity:1}}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important; transition:none !important}
+  }
+
+  @media (max-width:820px){
+    body{overflow:auto}
+    .panel{position:static; width:auto; margin:calc(18px + 52px) 12px 12px; height:auto; inset:auto}
+    .app{position:relative; height:auto; min-height:100vh}
+    #map{position:fixed}
+    .toolbar{flex-wrap:wrap; max-width:calc(100% - 36px)}
+    .topright{right:12px; top:12px}
+    .compass-n{display:none}
+    .legend{display:none}
+  }
+</style>
+
+<div class="app">
+  <canvas id="map"></canvas>
+  <div class="map-vignette"></div>
+
+  <div class="overlay">
+    <!-- toolbar -->
+    <div class="toolbar frost">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <b>Backtrace</b>
+          <span>Origin Tracer</span>
+        </div>
+      </div>
+      <div class="tdiv"></div>
+      <button class="tbtn primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add node
+      </button>
+      <button class="tbtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+        Load demo
+      </button>
+      <button class="tbtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0-12 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        Import
+      </button>
+      <button class="tbtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 12-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        Export
+      </button>
+    </div>
+
+    <!-- online status + theme toggle -->
+    <div class="topright">
+      <button class="theme-toggle frost" id="themeBtn" aria-label="Switch light / dark">
+        <svg class="ico ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+        <svg class="ico ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <div class="status frost">
+        <span class="dot"></span>Offline-ready · no account
+      </div>
+    </div>
+
+    <!-- north -->
+    <div class="compass-n frost">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 8 21l4-5 4 5z" style="fill:var(--accent)"/><path d="M12 3 8 21l4-5z" style="fill:var(--accent-hi)"/></svg>
+      <b style="position:absolute;top:-2px">N</b>
+    </div>
+
+    <!-- scale -->
+    <div class="scale frost">
+      <div class="bar"><i></i><i></i><i></i><i></i></div>
+      <div><span class="num">0</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="num">500 m</span></div>
+    </div>
+
+    <!-- legend -->
+    <div class="legend frost">
+      <div class="eyebrow">Legend</div>
+      <div class="row">
+        <div class="lg"><svg class="shp" viewBox="0 0 12 12"><path d="M6 1 11 11H1z" fill="currentColor"/></svg>Advancing</div>
+        <div class="lg"><svg class="shp" viewBox="0 0 12 12"><path d="M6 1 11 6 6 11 1 6z" fill="currentColor"/></svg>Lateral</div>
+        <div class="lg"><svg class="shp" viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="currentColor"/></svg>Backing</div>
+        <div class="lg"><svg class="shp" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg>Undet.</div>
+      </div>
+      <div>
+        <div class="bands"><i style="background:var(--post-lo)"></i><i style="background:var(--post-mid)"></i><i style="background:var(--post-hi)"></i></div>
+        <div class="band-lbl"><span>95%</span><span>68%</span><span>50%</span></div>
+      </div>
+      <div class="note"><b>Purple</b> = candidate origin area, not a single point. Color marks the indicator; shape marks spread.</div>
+    </div>
+
+    <!-- right panel -->
+    <aside class="panel frost load-fade">
+      <div class="panel-scroll">
+        <div class="p-head">
+          <div class="eyebrow">Investigation</div>
+          <h1>Marshall Fire — desk trace</h1>
+          <div class="meta">6 nodes · anchor <span class="num">39.9528, −105.284</span></div>
+          <div class="p-tag">An <b>honest posterior</b> — a candidate area, never a single coordinate. It stays broad when the indicators disagree.</div>
+        </div>
+
+        <!-- readout -->
+        <div class="card">
+          <div class="clab">
+            <div class="eyebrow">Candidate area · 95%</div>
+          </div>
+          <div class="area"><span class="v num">41,200</span><span class="u num">m²</span></div>
+
+          <div class="metric">
+            <div class="ml"><span>Spread of the field</span><span>moderate</span></div>
+            <div class="meter"><i style="width:54%"></i></div>
+          </div>
+
+          <div class="chips">
+            <span class="chip"><span class="d"></span><span class="num">1</span> candidate origin</span>
+            <span class="chip"><span class="d"></span>Geometry <span class="num">good</span></span>
+          </div>
+        </div>
+
+        <!-- selected node / compass -->
+        <div class="card">
+          <div class="clab"><div class="eyebrow">Selected node · bearing</div></div>
+          <div class="selnode">
+            <div class="compass-wrap"><svg id="compass" viewBox="0 0 120 120"></svg></div>
+            <div class="selfields">
+              <div class="field">
+                <label>Indicator</label>
+                <div class="val"><span>Angle of char</span><small>micro</small></div>
+              </div>
+              <div class="field">
+                <label>Azimuth (true)</label>
+                <div class="val"><span class="num" id="azlabel">—</span><small>drag ring</small></div>
+              </div>
+              <div class="field">
+                <label>Uncertainty σ</label>
+                <div class="val"><span class="num">98°</span><small>P&amp;B 2024</small></div>
+              </div>
+            </div>
+          </div>
+          <div class="drag-hint" style="margin-top:10px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" stroke-linecap="round"/></svg>
+            The wedge shows σ — how much this sign really constrains direction.
+          </div>
+        </div>
+
+        <!-- node list -->
+        <div class="nodes-h">
+          <div class="eyebrow">Nodes</div>
+          <span style="font-size:12px;color:var(--text-faint)" class="num">6</span>
+        </div>
+        <div class="nodes" id="nodelist"></div>
+        <button class="addrow">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Click the map to place a node
+        </button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ----- indicator colors (Okabe-Ito) -----
+  const C = {
+    char:'#e24a33', stain:'#e69f00', prot:'#56b4e9',
+    soot:'#009e73', ash:'#cc79a7', grass:'#0072b2'
+  };
+  // normalized map coords (0..1); bearing computed to point toward the field center
+  const CENTER = {x:0.505, y:0.455};
+  const NODES = [
+    {key:'char',  name:'Angle of char', spread:'advancing', sigma:98,  scatter:  6, x:0.30, y:0.72, color:C.char,  sel:true},
+    {key:'stain', name:'Staining',      spread:'lateral',   sigma:106, scatter: -9, x:0.70, y:0.73, color:C.stain},
+    {key:'prot',  name:'Protection',    spread:'backing',   sigma:81,  scatter:  7, x:0.80, y:0.34, color:C.prot},
+    {key:'soot',  name:'Sooting',       spread:'advancing', sigma:97,  scatter:-12, x:0.20, y:0.35, color:C.soot},
+    {key:'ash',   name:'White ash',     spread:'lateral',   sigma:81,  scatter:  4, x:0.50, y:0.82, color:C.ash},
+    {key:'grass', name:'Grass stem',    spread:'undet.',    sigma:98,  scatter:-14, x:0.40, y:0.18, color:C.grass},
+  ];
+  const shapePath = {
+    advancing:'M6 1 11 11H1z', lateral:'M6 1 11 6 6 11 1 6z',
+    backing:'square', 'undet.':'circle'
+  };
+
+  // ---------- MAP CANVAS ----------
+  const cv = document.getElementById('map');
+  const ctx = cv.getContext('2d');
+  let W=0, H=0, DPR=1;
+
+  // theme-aware map palettes (canvas colors live here, not in CSS)
+  const PALETTES = {
+    dark:  { tLo:[18,15,12],   tHi:[38,30,22],    hill:70, contour:[190,174,130],
+             grat:'rgba(230,220,200,.05)', post:'139,123,196', ring:'231,216,180', label:'rgba(231,216,180,.85)' },
+    light: { tLo:[228,218,200], tHi:[248,242,231], hill:52, contour:[120,92,60],
+             grat:'rgba(90,60,30,.07)',   post:'120,98,176',  ring:'96,74,128',   label:'rgba(96,74,128,.9)' }
+  };
+  function themeIsLight(){
+    const dt=document.documentElement.getAttribute('data-theme');
+    if(dt) return dt==='light';
+    return window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+  function curPal(){ return themeIsLight()?PALETTES.light:PALETTES.dark; }
+
+  function bearingToCenter(n){
+    const vx = CENTER.x - n.x, vy = CENTER.y - n.y;         // screen coords, y down
+    let az = Math.atan2(vx, -vy) * 180/Math.PI + n.scatter; // clockwise from north
+    return (az + 360) % 360;
+  }
+  NODES.forEach(n => n.bearing = bearingToCenter(n));
+
+  // pseudo-topographic height field
+  const peaks = [
+    {x:.18,y:.22,a:1.0,s:.16}, {x:.82,y:.20,a:.85,s:.14},
+    {x:.9,y:.75,a:.95,s:.18},  {x:.12,y:.82,a:.8,s:.15},
+    {x:.5,y:.5,a:-.5,s:.28},   {x:.62,y:.44,a:.35,s:.1},
+    {x:.35,y:.55,a:.3,s:.12},
+  ];
+  function heightAt(u,v){
+    let h=0;
+    for(const p of peaks){
+      const dx=u-p.x, dy=v-p.y;
+      h += p.a*Math.exp(-(dx*dx+dy*dy)/(2*p.s*p.s));
+    }
+    h += 0.10*Math.sin(u*11+v*4) + 0.07*Math.cos(u*5-v*9);
+    return h;
+  }
+
+  function drawTopo(){
+    const w=cv.width, h=cv.height;
+    const P=curPal();
+    const tLo=P.tLo, tHi=P.tHi, ct=P.contour, hillS=P.hill;
+    // precompute the height field once (1 eval/pixel instead of 3)
+    const HF=new Float32Array(w*h);
+    for(let y=0;y<h;y++){ const v=y/h; const row=y*w; for(let x=0;x<w;x++){ HF[row+x]=heightAt(x/w,v); } }
+    const img=ctx.createImageData(w,h);
+    const d=img.data;
+    const LEVELS=26;
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const idx=y*w+x;
+        const hv=HF[idx];
+        const hl=x>0?HF[idx-1]:hv;
+        const hu=y>0?HF[idx-w]:hv;
+        // base terrain: interpolate valley->ridge per palette
+        const t=Math.max(0,Math.min(1,(hv+0.3)/1.5));
+        let r=tLo[0]+t*(tHi[0]-tLo[0]);
+        let g=tLo[1]+t*(tHi[1]-tLo[1]);
+        let b=tLo[2]+t*(tHi[2]-tLo[2]);
+        // hillshade from gradient
+        const gx=hv-hl, gy=hv-hu;
+        const sh=(gx*0.6 - gy*0.9)*hillS;
+        r+=sh; g+=sh*0.86; b+=sh*0.64;
+        // contour lines: band edges tint toward the palette's contour color
+        const band=Math.floor((hv+2)*LEVELS);
+        const bandL=Math.floor((hl+2)*LEVELS);
+        const bandU=Math.floor((hu+2)*LEVELS);
+        if(band!==bandL || band!==bandU){
+          const major=(band%5===0);
+          const ca=major?0.5:0.28;
+          r=r*(1-ca)+ct[0]*ca; g=g*(1-ca)+ct[1]*ca; b=b*(1-ca)+ct[2]*ca;
+        }
+        const i=(y*w+x)*4;
+        d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+      }
+    }
+    ctx.putImageData(img,0,0);
+
+    // faint graticule
+    ctx.save();
+    ctx.strokeStyle=P.grat; ctx.lineWidth=1;
+    for(let gx=0.08*w; gx<w; gx+=w*0.12){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,h); ctx.stroke(); }
+    for(let gy=0.08*h; gy<h; gy+=h*0.12){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(w,gy); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawPosterior(){
+    const cx=CENTER.x*cv.width, cy=CENTER.y*cv.height;
+    const R=Math.min(cv.width,cv.height);
+    const P=curPal();
+    // stepped credible regions: each band between the 3 ring lines gets its OWN flat
+    // value — slightly purple at the 95% edge, mostly purple at 68%, nearly solid at the 50% core.
+    const r95=R*0.30, r68=R*0.205, r50=R*0.125, PC=P.post;
+    ctx.save();
+    ctx.translate(cx,cy); ctx.rotate(-0.35); ctx.scale(1.25,0.82);
+    // subtle feather just outside the 95% edge so the outer step isn't a hard cut
+    const fg=ctx.createRadialGradient(0,0,r95,0,0,r95*1.22);
+    fg.addColorStop(0,`rgba(${PC},0.25)`); fg.addColorStop(1,`rgba(${PC},0)`);
+    ctx.fillStyle=fg;
+    ctx.beginPath(); ctx.arc(0,0,r95*1.22,0,7); ctx.arc(0,0,r95,0,7); ctx.fill('evenodd');
+    // band 95→68  (~25%)
+    ctx.fillStyle=`rgba(${PC},0.25)`;
+    ctx.beginPath(); ctx.arc(0,0,r95,0,7); ctx.arc(0,0,r68,0,7); ctx.fill('evenodd');
+    // band 68→50  (~52%)
+    ctx.fillStyle=`rgba(${PC},0.52)`;
+    ctx.beginPath(); ctx.arc(0,0,r68,0,7); ctx.arc(0,0,r50,0,7); ctx.fill('evenodd');
+    // 50% core (~82% — nearly solid)
+    ctx.fillStyle=`rgba(${PC},0.82)`;
+    ctx.beginPath(); ctx.arc(0,0,r50,0,7); ctx.fill();
+    ctx.restore();
+
+    // HDR credible-region contours 95 / 68 / 50 (sand)
+    const hdr=[{r:0.30,w:1.4,a:.55},{r:0.205,w:1.4,a:.7},{r:0.125,w:1.6,a:.9}];
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(-0.35); ctx.scale(1.25,0.82);
+    for(const c of hdr){
+      ctx.beginPath(); ctx.arc(0,0,R*c.r,0,7);
+      ctx.strokeStyle=`rgba(${P.ring},${c.a})`; ctx.lineWidth=c.w; ctx.setLineDash([6,5]); ctx.stroke();
+    }
+    ctx.restore();
+
+    // labels on the outer ring
+    ctx.save();
+    ctx.font='11px ui-monospace,Consolas,monospace'; ctx.fillStyle=P.label;
+    ctx.fillText('95%', cx + R*0.30*1.25*Math.cos(-0.9)+6, cy + R*0.30*0.82*Math.sin(-0.9));
+    ctx.restore();
+  }
+
+  function drawNodes(){
+    const cx=CENTER.x*cv.width, cy=CENTER.y*cv.height;
+    for(const n of NODES){
+      const mx=n.x*cv.width, my=n.y*cv.height;
+      const az=n.bearing*Math.PI/180;
+      const dx=Math.sin(az), dy=-Math.cos(az);   // north = up
+      const rayLen=Math.hypot(cx-mx,cy-my)*0.96;
+
+      // sigma wedge for the selected node
+      if(n.sel){
+        const half=n.sigma*Math.PI/180;
+        const wLen=rayLen*1.02;
+        ctx.save();
+        ctx.translate(mx,my);
+        const a0=az-half, a1=az+half;
+        const g=ctx.createRadialGradient(0,0,0,0,0,wLen);
+        g.addColorStop(0,'rgba(226,74,51,.16)'); g.addColorStop(1,'rgba(226,74,51,0)');
+        ctx.fillStyle=g;
+        ctx.beginPath(); ctx.moveTo(0,0);
+        ctx.arc(0,0,wLen, a0-Math.PI/2, a1-Math.PI/2); // canvas 0 = +x; our az measured from +y(up)->convert
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+
+      // bearing ray
+      ctx.save();
+      const grd=ctx.createLinearGradient(mx,my,mx+dx*rayLen,my+dy*rayLen);
+      grd.addColorStop(0,n.color); grd.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.strokeStyle=grd; ctx.lineWidth=n.sel?2.4:1.6; ctx.setLineDash(n.sel?[]:[7,6]);
+      ctx.globalAlpha=n.sel?0.95:0.6;
+      ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx+dx*rayLen,my+dy*rayLen); ctx.stroke();
+      ctx.restore();
+
+      // marker
+      drawMarker(mx,my,n);
+    }
+  }
+
+  function drawMarker(mx,my,n){
+    const r=13;
+    ctx.save();
+    ctx.translate(mx,my);
+    // halo
+    ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=10; ctx.shadowOffsetY=2;
+    ctx.fillStyle=n.color; ctx.strokeStyle='rgba(12,10,8,.9)'; ctx.lineWidth=2.5;
+    ctx.beginPath();
+    if(n.spread==='advancing'){ ctx.moveTo(0,-r); ctx.lineTo(r*0.92,r*0.7); ctx.lineTo(-r*0.92,r*0.7); ctx.closePath(); }
+    else if(n.spread==='lateral'){ ctx.moveTo(0,-r); ctx.lineTo(r,0); ctx.lineTo(0,r); ctx.lineTo(-r,0); ctx.closePath(); }
+    else if(n.spread==='backing'){ ctx.rect(-r*0.8,-r*0.8,r*1.6,r*1.6); }
+    else { ctx.arc(0,0,r*0.85,0,7); }
+    ctx.fill(); ctx.shadowBlur=0; ctx.stroke();
+    // white inner ring for pop
+    ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1; ctx.beginPath();
+    if(n.spread==='undet.'){ ctx.arc(0,0,r*0.85,0,7); ctx.stroke(); }
+    if(n.sel){ ctx.strokeStyle='#ff7a45'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(0,0,r+7,0,7); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function render(){ drawTopo(); drawPosterior(); drawNodes(); }
+
+  function resize(){
+    DPR=Math.min(window.devicePixelRatio||1,1.5);
+    const rect=cv.getBoundingClientRect();
+    W=rect.width; H=rect.height;
+    cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+    render();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- THEME TOGGLE (wired first so nothing downstream can disable it) ----------
+  // The icon itself swaps via CSS; JS only flips data-theme and redraws the canvas.
+  const themeBtn=document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', ()=>{
+    document.documentElement.setAttribute('data-theme', themeIsLight()?'dark':'light');
+  });
+  new MutationObserver(()=>render())
+    .observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()=>{
+    if(!document.documentElement.getAttribute('data-theme')) render();
+  });
+
+  // ---------- COMPASS RING (selected node) ----------
+  const sel=NODES.find(n=>n.sel);
+  document.getElementById('azlabel').textContent = Math.round(sel.bearing)+'°';
+  (function compass(){
+    const NS='http://www.w3.org/2000/svg';
+    const svg=document.getElementById('compass');
+    const cx=60, cy=60, R=48;
+    const az=sel.bearing, half=sel.sigma/2;
+    const pol=(deg,rad)=>{const a=(deg-90)*Math.PI/180; return [cx+rad*Math.cos(a), cy+rad*Math.sin(a)];};
+    // az measured clockwise from north(up): convert to svg angle where 0deg=up
+    const P=(deg,rad)=>{const a=(deg)*Math.PI/180; return [cx+rad*Math.sin(a), cy-rad*Math.cos(a)];};
+    const el=(t,at)=>{const e=document.createElementNS(NS,t); for(const k in at)e.setAttribute(k,at[k]); return e;};
+
+    svg.appendChild(el('circle',{cx,cy,r:R+7,style:'fill:var(--inset)'}));
+    svg.appendChild(el('circle',{cx,cy,r:R,fill:'none',style:'stroke:var(--border-strong);stroke-width:1'}));
+    // ticks
+    for(let d=0; d<360; d+=30){
+      const [x1,y1]=P(d,R), [x2,y2]=P(d, d%90===0?R-8:R-5);
+      const card=d%90===0;
+      svg.appendChild(el('line',{x1,y1,x2,y2,style:`stroke:${card?'var(--text-muted)':'var(--text-faint)'};stroke-width:${card?1.5:1}`}));
+    }
+    // cardinal N
+    const [nx,ny]=P(0,R-16);
+    const nt=el('text',{x:nx,y:ny+4,'text-anchor':'middle','font-size':10,'font-family':'ui-monospace,monospace',style:'fill:var(--text-muted)'}); nt.textContent='N'; svg.appendChild(nt);
+
+    // sigma wedge
+    const [wx1,wy1]=P(az-half,R-2), [wx2,wy2]=P(az+half,R-2);
+    const large = (2*half)>180?1:0;
+    svg.appendChild(el('path',{d:`M${cx} ${cy} L${wx1} ${wy1} A${R-2} ${R-2} 0 ${large} 1 ${wx2} ${wy2} Z`,
+      fill:'rgba(226,74,51,.16)', stroke:'rgba(226,74,51,.4)','stroke-width':1}));
+    // needle
+    const [ex,ey]=P(az,R-6);
+    svg.appendChild(el('line',{x1:cx,y1:cy,x2:ex,y2:ey,stroke:'#ff7a45','stroke-width':2.5,'stroke-linecap':'round'}));
+    svg.appendChild(el('circle',{cx:ex,cy:ey,r:3,fill:'#ff9a70'}));
+    svg.appendChild(el('circle',{cx,cy,r:4,stroke:'#ff7a45','stroke-width':1.5,style:'fill:var(--surface-1)'}));
+    // center reading
+    const rt=el('text',{x:cx,y:cy+22,'text-anchor':'middle','font-size':11,'font-family':'ui-monospace,monospace','font-weight':600,style:'fill:var(--text)'});
+    rt.textContent=Math.round(az)+'°'; svg.appendChild(rt);
+  })();
+
+  // ---------- NODE LIST ----------
+  const list=document.getElementById('nodelist');
+  const glyphSvg = (sp,color) => {
+    if(sp==='advancing') return `<svg viewBox="0 0 12 12" style="color:${color}"><path d="M6 1 11 11H1z" fill="currentColor"/></svg>`;
+    if(sp==='lateral')   return `<svg viewBox="0 0 12 12" style="color:${color}"><path d="M6 1 11 6 6 11 1 6z" fill="currentColor"/></svg>`;
+    if(sp==='backing')   return `<svg viewBox="0 0 12 12" style="color:${color}"><rect x="1.5" y="1.5" width="9" height="9" fill="currentColor"/></svg>`;
+    return `<svg viewBox="0 0 12 12" style="color:${color}"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg>`;
+  };
+  list.innerHTML = NODES.map(n=>`
+    <button class="node${n.sel?' sel':''}">
+      <span class="glyph">${glyphSvg(n.spread,n.color)}</span>
+      <span class="nb">
+        <span class="nt">${n.name}</span>
+        <span class="ns"><span class="sp">${n.spread}</span> · <span class="num">${Math.round(n.bearing)}°</span></span>
+      </span>
+      <span class="sig">σ <b class="num">${n.sigma}°</b></span>
+      <span class="iconbtn" role="button" aria-label="Remove node" title="Remove">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </span>
+    </button>`).join('');
+})();
+</script>
