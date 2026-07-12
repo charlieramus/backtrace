@@ -71,7 +71,46 @@ carry the mockup's colors + the P&B sigmas. Report the indicator table and the s
 
 ## Stage 1 Report
 
-_Pending._
+Defined the domain and the in-memory store, seeded from the research and shaped for the
+mockup's UI + v5's export.
+
+**Files added**
+- `src/domain/indicators.ts` — the `IndicatorType` table as a typed constant
+  (`INDICATOR_TYPES`), from Parker & Babrauskas 2024 Table 5. Each entry:
+  `{ code, label, scale, priorSigmaDeg, color, evidenceNote }`. The six colored micro
+  indicators map to the mockup's **exact** `--ind-*` tokens + the P&B sigmas:
+  `ANGLE_OF_CHAR` 98° (n=89) → `--ind-char`, `STAINING` 106° (n=133) → `--ind-stain`,
+  `PROTECTION` 81° (n=39) → `--ind-prot`, `SOOTING` 97° (n=20) → `--ind-soot`,
+  `WHITE_ASH` 81° (n=6) → `--ind-ash`, `GRASS_STEM` 98° (n=7) → `--ind-grass`. Plus five
+  `MACRO` priors with `priorSigmaDeg: null` + `color: null`: `FOLIAGE_FREEZE`, `CUPPING`,
+  `SPALLING`, `CURLING`, `V_U_PATTERN`. `color` holds the token **name** (e.g.
+  `"--ind-char"`) so nothing hard-codes a hex; `getIndicator(code)` and
+  `indicatorColor(code)` (returns `var(--ind-*)`, falling back to `var(--text-muted)` for
+  the direction-less macro set) are the accessors markers use in Stage 2.
+- `src/domain/node.ts` — `Node = { id, lat, lon, indicatorCode, spreadType, azimuthTrueDeg,
+  sigmaDeg, notes }` with `SpreadType = ADVANCING|LATERAL|BACKING|UNDETERMINED`.
+  `effectiveSigma(node)` returns the override when set, else the indicator's P&B prior, else
+  `null` (macro with no override).
+- `src/domain/node.test.ts` — 10 unit tests: the indicator→color/sigma mapping, the macro
+  null seeding, `effectiveSigma` fallback/override/null, and store add/select/remove +
+  subscribe notification (incl. unsubscribe stops, and `setArmedIndicator`).
+
+**Files changed**
+- `src/store.ts` — replaced the placeholder with the real store. `createStore()` (used
+  per-test for isolation) + a shared `store` singleton. State:
+  `{ incident: { id, name, createdAtUtc, anchorLat, anchorLon }, nodes: Node[],
+  selectedNodeId, armedIndicatorCode }`. API: `getState / getAll / add / update / remove /
+  select / getSelected / setArmedIndicator / getArmedIndicator / getIncident / subscribe`.
+  Pure, in-memory, framework-free; `add` fills id + defaults (spread `ADVANCING`, azimuth
+  `null`, sigma `null`), `remove` clears selection if it was selected, `subscribe` returns an
+  unsubscribe. The `anchor*` fields exist on the header now but stay `null` — the first-node
+  anchor is wired in Stage 2 where placement happens. No persistence (v5).
+- `src/domain/index.ts` — barrel now re-exports `./indicators` + `./node`.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green — 11 tests pass (10 new domain/store tests
++ the smoke test). The six primary indicators carry the mockup's colors and the P&B sigmas
+(asserted in the test). No deviations from the spec; anchor-set intentionally deferred to
+Stage 2 (its placement flow), matching the stage boundaries.
 
 ---
 

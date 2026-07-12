@@ -1,3 +1,3 @@
-// Domain model (indicator types + Node + investigation).
-// Populated in UPDATELOGV2.md. Placeholder so imports resolve.
-export {};
+// Domain model barrel (indicator types + Node). Populated in UPDATELOGV2.md.
+export * from "./indicators";
+export * from "./node";
