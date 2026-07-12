@@ -1,37 +1,104 @@
 /*
- * Design tokens — placeholder.
+ * Design tokens — ported VERBATIM from design/mockup.reference.html (the visual
+ * source of truth). The :root dark defaults, the :root[data-theme="light"] and
+ * @media(prefers-color-scheme:light) light overrides, the base element styles, and
+ * the .num / .eyebrow helpers below are byte-for-byte the mockup's, so no component
+ * ever hard-codes a color/radius — everything reads var(--…).
  *
- * Stage 2 of UPDATELOGV1.md ports the mockup's full token system here verbatim
- * (the :root dark defaults, the light overrides, the type/radius/motion scales,
- * and the .num / .eyebrow helpers). For Stage 1 this only wires the self-hosted
- * font families so the shell resolves to Inter / JetBrains Mono with no network
- * font requests.
+ * --font-ui / --font-data resolve to the self-hosted faces declared in fonts.css
+ * (Stage 1). Imported first so the @font-face families exist before use.
  */
 @import "./fonts/fonts.css";
 
-:root {
-  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-data: "JetBrains Mono", ui-monospace, "Cascadia Code", "SFMono-Regular",
-    Consolas, monospace;
+:root{
+  --bg:#0f0e0d;
+  --surface-1:#1b1815;
+  --surface-2:#262019;
+  --border:rgba(255,240,230,.09);
+  --border-strong:rgba(255,240,230,.16);
+  --text:#f0ebe4;
+  --text-muted:#a39a8c;
+  --text-faint:#726a5f;
+  --accent:#ff7a45;      /* ember */
+  --accent-hi:#ff9a70;
+  --accent-dim:rgba(255,122,69,.14);
+  /* muted-purple posterior ramp */
+  --post-lo:#2a2140;
+  --post-mid:#5b4b8a;
+  --post-hi:#8b7bc4;
+  --post-ink:#a99cd6;
+  --sand:#e7d8b4;        /* HDR contour lines */
+  /* Okabe-Ito indicator colors (colorblind-safe) */
+  --ind-char:#e24a33;
+  --ind-stain:#e69f00;
+  --ind-prot:#56b4e9;
+  --ind-soot:#009e73;
+  --ind-ash:#cc79a7;
+  --ind-grass:#0072b2;
+  --ok:#5fbf8f;
+
+  /* semantic elevation overlays (flip per theme) */
+  --fill-1:rgba(255,240,230,.03);
+  --fill-2:rgba(255,240,230,.06);
+  --fill-strong:rgba(255,240,230,.09);
+  --inset:rgba(0,0,0,.25);
+  --hover:rgba(255,240,230,.06);
+  --vignette:rgba(0,0,0,.45);
+  --scroll:rgba(255,240,230,.12);
+
+  --panel-w:340px;
+  --r-xs:6px; --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:28px; --r-full:999px;
+  --font-ui:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-data:"JetBrains Mono",ui-monospace,"Cascadia Code","SFMono-Regular",Consolas,monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --dur-fast:120ms; --dur-base:220ms;
+  --sh-1:0 1px 2px rgba(0,0,0,.4);
+  --sh-2:0 10px 30px -8px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  --sh-3:0 24px 60px -12px rgba(0,0,0,.7);
 }
 
-* {
-  box-sizing: border-box;
+/* ---- LIGHT THEME (warm paper, to match a light basemap) ---- */
+:root[data-theme="light"]{ color-scheme:light;
+  --bg:#f4efe7; --surface-1:#fffdf9; --surface-2:#efe8dc;
+  --border:rgba(60,45,30,.14); --border-strong:rgba(60,45,30,.24);
+  --text:#241f19; --text-muted:#6d6252; --text-faint:#9a8f7e;
+  --accent:#d95a28; --accent-hi:#b8481c; --accent-dim:rgba(217,90,40,.12); --post-ink:#6a58a0;
+  --fill-1:rgba(40,25,10,.035); --fill-2:rgba(40,25,10,.06); --fill-strong:rgba(40,25,10,.10);
+  --inset:rgba(40,25,10,.05); --hover:rgba(40,25,10,.06);
+  --vignette:rgba(90,70,45,.10); --scroll:rgba(40,25,10,.18);
+  --sh-1:0 1px 2px rgba(60,45,30,.12);
+  --sh-2:0 10px 30px -8px rgba(60,45,30,.20),0 2px 8px rgba(60,45,30,.10);
+  --sh-3:0 24px 60px -12px rgba(60,45,30,.24);
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme]){ color-scheme:light;
+    --bg:#f4efe7; --surface-1:#fffdf9; --surface-2:#efe8dc;
+    --border:rgba(60,45,30,.14); --border-strong:rgba(60,45,30,.24);
+    --text:#241f19; --text-muted:#6d6252; --text-faint:#9a8f7e;
+    --accent:#d95a28; --accent-hi:#b8481c; --accent-dim:rgba(217,90,40,.12); --post-ink:#6a58a0;
+    --fill-1:rgba(40,25,10,.035); --fill-2:rgba(40,25,10,.06); --fill-strong:rgba(40,25,10,.10);
+    --inset:rgba(40,25,10,.05); --hover:rgba(40,25,10,.06);
+    --vignette:rgba(90,70,45,.10); --scroll:rgba(40,25,10,.18);
+    --sh-1:0 1px 2px rgba(60,45,30,.12);
+    --sh-2:0 10px 30px -8px rgba(60,45,30,.20),0 2px 8px rgba(60,45,30,.10);
+    --sh-3:0 24px 60px -12px rgba(60,45,30,.24);
+  }
 }
 
-html,
-body {
-  height: 100%;
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--font-ui); font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; overflow:hidden;
 }
-
-body {
-  margin: 0;
-  font-family: var(--font-ui);
+.num{font-family:var(--font-data); font-variant-numeric:tabular-nums; letter-spacing:-.01em}
+.eyebrow{
+  font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--text-faint);
 }
+button{font-family:inherit; color:inherit; cursor:pointer}
 
-/* Numeric helper — tabular figures, monospace. Stage 2 expands this. */
-.num {
-  font-family: var(--font-data);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
+@media (prefers-reduced-motion:reduce){
+  *{animation:none !important; transition:none !important}
 }

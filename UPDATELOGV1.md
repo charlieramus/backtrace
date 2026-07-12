@@ -153,7 +153,44 @@ diff check.
 
 ## Stage 2 Report
 
-_Pending._
+Ported the mockup's entire token system into `src/ui/tokens.css`, replacing the Stage 1
+placeholder. The file now carries, copied byte-for-byte from `design/mockup.reference.html`:
+
+- The full **`:root` dark defaults** — `--bg`, `--surface-1/-2`, `--border`, `--border-strong`,
+  `--text`/`--text-muted`/`--text-faint`, the ember `--accent`/`--accent-hi`/`--accent-dim`, the
+  muted-purple posterior ramp (`--post-lo/-mid/-hi/-ink`) + `--sand`, the six Okabe-Ito indicator
+  colors (`--ind-char/-stain/-prot/-soot/-ash/-grass`), `--ok`, the semantic elevation overlays
+  (`--fill-1/-2/-strong`, `--inset`, `--hover`, `--vignette`, `--scroll`), `--panel-w:340px`, the
+  radius scale (`--r-xs 6` … `--r-full 999`), the type tokens (`--font-ui` Inter / `--font-data`
+  JetBrains Mono), motion (`--ease`, `--dur-fast`, `--dur-base`), and elevation (`--sh-1/-2/-3`).
+- The **`:root[data-theme="light"]`** warm-paper overrides and the matching
+  **`@media (prefers-color-scheme:light) :root:not([data-theme])`** block — identical values, so
+  an explicit choice and the OS preference resolve the same way.
+- **Base styles** copied verbatim: `*{box-sizing:border-box}`, full-height `html,body`, the
+  `body{…}` rule (bg/text/font/size 15px/line-height 1.45/antialiasing/`overflow:hidden`), the
+  `.num` helper (`--font-data` + `tabular-nums` + `-.01em`), `.eyebrow`, the `button` inherit rule,
+  and the `@media (prefers-reduced-motion:reduce)` guard.
+
+`--font-ui`/`--font-data` are wired to the self-hosted `@font-face` families from Stage 1: the file
+`@import`s `./fonts/fonts.css` at the top so the faces exist before the tokens reference them.
+`tokens.css` is imported exactly once, at the app entry (`src/main.ts`), per instruction 4.
+
+**Verify**
+- `tsc --noEmit` clean; `npm run build` still succeeds (the `@import` chain resolves; all 8 fonts
+  bundle).
+- Token spot-diff — the four requested values are present identically in both files:
+  `--accent:#ff7a45`, `--post-hi:#8b7bc4`, `--panel-w:340px`, and light `--bg:#f4efe7` → all MATCH.
+- Stronger check: extracted **every** `--name:value` declaration from the mockup's token region and
+  from `tokens.css`, sorted, and `diff`'d → **identical set, zero differences**.
+- Theme flip is carried by the ported override selectors byte-for-byte, so
+  `data-theme="light"` on `<html>` (or an OS light preference) swaps `--bg`/`--text`/`--accent`
+  exactly as the mockup does. A live pixel-level side-by-side is deferred to Stage 5's verify (the
+  chrome that makes the flip visible doesn't exist yet).
+
+**Deviation noted (mockup wins):** the log's Decisions list motion as `--dur-fast/-base/-slow`, but
+the mockup defines only `--dur-fast` and `--dur-base` — there is no `--dur-slow`. Per "when this log
+and the mockup disagree, the mockup wins," I ported exactly the two tokens the mockup has and did
+not invent `--dur-slow`.
 
 ---
 
