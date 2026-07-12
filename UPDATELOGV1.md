@@ -299,7 +299,53 @@ offline) updates the chip. Report the toggle + offline behavior.
 
 ## Stage 4 Report
 
-_Pending._
+Built the mockup's top chrome as real, working components over the map.
+
+**Toolbar** (`index.html`, `.overlay`) — copied the mockup's `.toolbar.frost` markup verbatim: the
+`.brand` (ember `.mark` tile + `<b>Backtrace</b>` / `<span>Origin Tracer</span>`), the `.tdiv`
+divider, and four real `<button class="tbtn">`s with the mockup's inline SVG icons — **Add node**
+(`.primary`, ember), **Load demo**, **Import**, **Export**. No actions wired (those are v2/v5), but
+they are real buttons with correct labels and keyboard focus rings. The `.toolbar/.brand/.mark/
+.mark::after/.tdiv/.tbtn` CSS (incl. `:hover` and `.tbtn:focus-visible … {outline:2px solid
+var(--accent)}`) was appended to `src/ui/app.css` byte-for-byte from the mockup.
+
+**Top-right cluster** (`.topright`) — the round frosted `#themeBtn` theme-toggle carrying both the
+sun and moon inline SVGs (`.ico-sun`/`.ico-moon`, swapped purely by CSS per theme), and the
+`.status.frost` offline chip. `.topright` is positioned to the LEFT of the (future) panel exactly
+as the mockup does: `right:calc(var(--panel-w) + 30px)`, with the mobile override
+(`@media (max-width:820px){ .topright{right:12px;top:12px} .toolbar{flex-wrap:wrap;…} }`). The
+`.status/.theme-toggle` CSS and the `:root[data-theme="light"]`/`prefers-color-scheme` icon-swap
+rules were copied verbatim.
+
+**Theme toggle behavior** (`src/ui/theme.ts`) — clicking flips `data-theme` on
+`document.documentElement` between `light`/`dark`, persists the choice to `localStorage`
+(`backtrace-theme`), and restores it on load via `applyStoredTheme()` (called before the map mounts
+so the first basemap matches with no flash). When the user hasn't chosen, no `data-theme` is set so
+the OS preference still wins. The basemap re-swaps automatically because Stage 3's map already
+watches `data-theme` via a `MutationObserver`.
+
+**Offline chip** (`src/ui/offline.ts`) — reflects real connectivity only (never server sync, since
+there is none). Listens to `window` `online`/`offline` and reads `navigator.onLine`. Online: the
+mockup's "Offline-ready · no account" with the `--ok` dot. Offline: an altered muted state —
+"Offline · working locally" with the dot recolored to `--text-faint` via a `.status.off` class.
+
+**Verify (headless Chromium via browse, dev server on :5188; `tsc --noEmit` clean; build OK)**
+- Toolbar + cluster match the mockup: screenshots in both themes show the ember mark, the four
+  labeled buttons (`Add node | Load demo | Import | Export`), brand "Backtrace / ORIGIN TRACER",
+  the sun/moon toggle, and the green-dot chip — no console errors.
+- Theme toggle: clicking `#themeBtn` set `data-theme="light"`, `localStorage="light"`, `body`
+  background `rgb(244,239,231)` (= light `--bg #f4efe7`), swapped to `light_all` basemap tiles, and
+  showed the moon icon. **Reload persisted** the choice (still `data-theme="light"`, light tiles).
+- Offline chip: firing `offline` (with `navigator.onLine` false) → label "Offline · working
+  locally", `.off` class on, dot `rgb(154,143,126)` (= `--text-faint`); firing `online` → back to
+  "Offline-ready · no account", `.off` off.
+
+**Deviations noted:** (1) load-in animations for the toolbar/status (mockup's `.toolbar` rise +
+`.status` fade) are intentionally deferred to Stage 5, which owns "Load-in motion." (2) The chip's
+label text is wrapped in a `<span class="status-label">` (the mockup had bare text) so JS can swap
+the copy without disturbing the dot; the online copy is byte-identical to the mockup. (3) Added a
+small `.status.off .dot` rule (not in the mockup, which only drew the online state) for the honest
+offline appearance.
 
 ---
 
