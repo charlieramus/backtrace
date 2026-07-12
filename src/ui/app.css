@@ -162,13 +162,6 @@
   padding:8px 10px; border-radius:var(--r-sm); background:var(--fill-1); border:1px solid var(--border);
 }
 .p-tag b{color:var(--accent-hi); font-weight:600}
-/* empty-state hint where the node list will go (v2). Addition beyond the mockup,
-   echoing the mockup's dashed .addrow affordance. */
-.empty-hint{
-  margin-top:2px; padding:22px 14px; text-align:center;
-  border-radius:var(--r-md); border:1px dashed var(--border-strong);
-  color:var(--text-faint); font-size:12.5px; line-height:1.5;
-}
 
 /* ---------- node markers (v2 Stage 2) ---------- */
 /* Leaflet divIcon wrapper: the SVG carries all the paint; drop the default box. */
@@ -236,6 +229,39 @@
 
 /* toolbar Add-node armed state */
 .tbtn.primary.active{background:rgba(255,122,69,.28); border-color:var(--accent)}
+
+/* ---------- node list (v2 Stage 3, ported from the mockup) ---------- */
+.nodes-h{display:flex; justify-content:space-between; align-items:center}
+.nodes-h .eyebrow{color:var(--text-muted)}
+.nodes{display:flex; flex-direction:column; gap:7px}
+.node{
+  display:flex; align-items:center; gap:11px; padding:10px 11px; border-radius:var(--r-md);
+  border:1px solid var(--border); background:var(--fill-1); text-align:left; width:100%; cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease);
+}
+.node:hover{background:var(--hover); transform:translateX(-2px)}
+.node.sel{border-color:rgba(255,122,69,.5); background:var(--accent-dim)}
+.node .glyph{width:22px; height:22px; flex:none; display:grid; place-items:center}
+.node .nb{flex:1; min-width:0}
+.node .nt{font-size:13.5px; font-weight:550; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.node .ns{font-size:11px; color:var(--text-muted); display:flex; gap:8px}
+.node .ns .sp{text-transform:capitalize}
+.node .sig{font-size:12px; color:var(--text-muted)}
+.node .sig b{color:var(--text); font-weight:600}
+.iconbtn{
+  width:26px; height:26px; border-radius:var(--r-sm); border:1px solid transparent; background:transparent;
+  color:var(--text-faint); display:grid; place-items:center; flex:none; cursor:pointer;
+}
+.iconbtn:hover{background:rgba(226,74,51,.14); color:#ff8f7a}
+.iconbtn svg{width:14px; height:14px}
+
+.addrow{
+  display:flex; align-items:center; justify-content:center; gap:8px; padding:11px; width:100%;
+  border-radius:var(--r-md); border:1px dashed var(--border-strong); background:transparent;
+  color:var(--text-muted); font-size:13px; font-weight:500;
+  transition:border-color var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease);
+}
+.addrow:hover{border-color:var(--accent); color:var(--accent-hi)}
 
 /* ---------- load-in motion (Stage 5) ---------- */
 .load-fade{animation:rise var(--dur-base) var(--ease) both}

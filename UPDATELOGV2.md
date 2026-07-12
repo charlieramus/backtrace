@@ -230,7 +230,51 @@ tracks count + anchor. Report the selection/removal flow and a mockup parity che
 
 ## Stage 3 Report
 
-_Pending._
+Filled the panel with the mockup's node list and wired two-way selection + removal. The
+legend now reads true: color = indicator, shape = spread, and every row/marker agrees.
+
+**Files added**
+- `src/ui/NodeList.ts` — `initNodeList(container, store)`. Renders each node as the mockup's
+  `.node` row: the spread glyph in the indicator color (`glyphSvg`, ported from the mockup), the
+  indicator name (`.nt`), a subline (`.ns .sp`, the capitalized spread; v3 adds the bearing), the
+  σ readout (`.sig`, tabular `σ 98°` via `effectiveSigma`), and a ✕ remove button (`.iconbtn
+  .remove`). Re-renders from the store on every change; reflects the selection with `.node.sel`.
+  Clicking a row calls `store.select`; clicking ✕ calls `store.remove`; rows are keyboard-
+  operable (Enter/Space). When the selection changes (e.g. from a marker click) the selected row
+  `scrollIntoView({ block: "nearest" })`.
+- `src/ui/panelMeta.ts` — `initPanelMeta(store)`. Keeps the head's `N node(s) · anchor
+  <lat,lon>` line live (anchor = the incident session anchor, 4dp/3dp, mockup's typographic
+  minus, `—` until the first node) and the Nodes-header count, both in the data font.
+
+**Files changed**
+- `src/map/markers.ts` — the selected node's icon now carries the mockup's ember selection ring
+  (`<circle r=R+7>`, 2.5px, `#ff7a45`); the viewBox grew to 44×44 (center 22) so the ring +
+  drop-shadow have room. Marker `click` → `store.select(id)`; marker `contextmenu` (right-click)
+  → `store.remove(id)` (the marker context action). The per-node signature now includes the
+  selected flag so only the affected markers rebuild.
+- `index.html` — replaced the v1 empty-state hint with the real Nodes section: `.nodes-h`
+  (eyebrow + `.nodes-count`), `#nodelist`, and the dashed `.addrow` (`#addRow`).
+- `src/main.ts` — wired `initNodeList(#nodelist)` + `initPanelMeta`; captured the placement
+  controller so the dashed addrow also arms placement (`placement.arm()`).
+- `src/ui/app.css` — ported the mockup's `.nodes/.node/.nb/.nt/.ns/.sig/.iconbtn/.addrow/.glyph`
+  styles verbatim (adding `cursor:pointer` since the rows are `div[role=button]` not `<button>`);
+  removed the now-unused `.empty-hint` block.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green (12 tests); `vite build` succeeds. Exercised
+the running app in a headless browser (gstack /browse): placed 3 nodes → 3 rows, `nodes-count`
+3, meta `3 nodes · anchor 40.4302, −109.534`; clicking a list row set `.node.sel` and put exactly
+one ember ring on its marker; clicking a *different marker* moved the selection to that node's row
+(one selected at a time); removing the selected node via its ✕ dropped the row **and** its marker,
+cleared selection, and updated the count; right-clicking a marker removed it too; the meta line
+tracked count + anchor throughout and pluralized correctly (`1 node`). A screenshot confirmed the
+rows match the mockup row-for-row (colored glyph, name, capitalized spread, `σ` readout, ✕) with
+the selected row's ember tint and the map marker's matching ring. No app console errors (only
+Vite HMR websocket reconnect noise from a dev-server restart).
+
+**Notes / deviations:** the session anchor stays fixed once set (it's the ENU origin for v3/v4),
+so removing the first node does not move it — intended. NOW.md was left unchanged: Stage 3's spec
+doesn't instruct a NOW.md update (the v0 roadmap folds that into v5's coherence pass). The row
+subline shows only the spread for now; the bearing joins it in v3 as the spec notes.
 
 ---
 

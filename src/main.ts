@@ -16,6 +16,8 @@ import { applyStoredTheme, initThemeToggle } from "./ui/theme";
 import { initOfflineChip } from "./ui/offline";
 import { initIndicatorPicker } from "./ui/components/indicatorPicker";
 import { initSpreadControl } from "./ui/components/spreadControl";
+import { initNodeList } from "./ui/NodeList";
+import { initPanelMeta } from "./ui/panelMeta";
 import { store } from "./store";
 
 // Restore a persisted theme choice before the map mounts so the first basemap
@@ -41,6 +43,15 @@ if (panelControls) {
   initSpreadControl(panelControls, store);
 }
 
+// Node list + live panel meta (count + anchor).
+const nodelist = document.getElementById("nodelist");
+if (nodelist) initNodeList(nodelist, store);
+initPanelMeta(store);
+
 // Placement mode: the primary "Add node" toolbar button arms map clicks.
 const addBtn = document.querySelector<HTMLElement>(".toolbar .tbtn.primary");
-if (addBtn) initPlacement(map, store, addBtn);
+const placement = addBtn ? initPlacement(map, store, addBtn) : null;
+
+// The dashed "Click the map to place a node" row also arms placement.
+const addRow = document.getElementById("addRow");
+if (addRow && placement) addRow.addEventListener("click", () => placement.arm());

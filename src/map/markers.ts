@@ -6,10 +6,12 @@
 // shapes, so it tracks pan/zoom and stays crisp. The layer subscribes to the store
 // and adds/removes/updates markers to match, one per node.
 //
-// Shapes are the mockup's, mapped to a 32×32 viewBox centered at (16,16) with r=13
-// (≈26px marker): advancing ▲, lateral ◆, backing ■, undetermined ● (with the
-// mockup's white inner ring). Fill uses indicatorColor() → var(--ind-*), so markers
-// stay theme-driven. The ember selection ring is added in Stage 3.
+// Shapes are the mockup's, mapped to a 44×44 viewBox centered at (22,22) with r=13
+// (≈26px marker; the extra padding leaves room for the drop-shadow + selection ring):
+// advancing ▲, lateral ◆, backing ■, undetermined ● (with the mockup's white inner
+// ring). Fill uses indicatorColor() → var(--ind-*), so markers stay theme-driven. The
+// selected node also gets the mockup's ember selection ring (arc r+7, 2.5px, #ff7a45).
+// Clicking a marker selects its node; right-clicking (contextmenu) removes it.
 
 import L from "leaflet";
 import type { Store } from "../store";
@@ -17,8 +19,9 @@ import type { Node, SpreadType } from "../domain/node";
 import { indicatorColor } from "../domain/indicators";
 
 const OUTLINE = "rgba(12,10,8,.9)";
+const EMBER = "#ff7a45"; // selection ring (mockup's fixed ember, both themes)
 const R = 13;
-const C = 16; // center of the 32×32 viewBox
+const C = 22; // center of the 44×44 viewBox
 
 /** SVG path/element for a spread shape, centered at (16,16), r=13. */
 function shapeSvg(spread: SpreadType, fill: string): string {
@@ -47,16 +50,19 @@ function shapeSvg(spread: SpreadType, fill: string): string {
   }
 }
 
-function iconFor(node: Node): L.DivIcon {
+function iconFor(node: Node, selected: boolean): L.DivIcon {
   const fill = indicatorColor(node.indicatorCode);
+  const ring = selected
+    ? `<circle cx="${C}" cy="${C}" r="${R + 7}" fill="none" stroke="${EMBER}" stroke-width="2.5"/>`
+    : "";
   const html =
-    `<svg class="bt-marker" viewBox="0 0 32 32" width="32" height="32" ` +
-    `aria-hidden="true">${shapeSvg(node.spreadType, fill)}</svg>`;
+    `<svg class="bt-marker" viewBox="0 0 44 44" width="44" height="44" ` +
+    `aria-hidden="true">${shapeSvg(node.spreadType, fill)}${ring}</svg>`;
   return L.divIcon({
     html,
     className: "bt-marker-icon",
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
   });
 }
 
@@ -74,24 +80,34 @@ export function initMarkers(map: L.Map, store: Store): MarkerLayer {
   // node id -> { marker, signature } so we only rebuild an icon when it changed.
   const markers = new Map<string, { marker: L.Marker; sig: string }>();
 
-  function signature(n: Node): string {
-    return `${n.indicatorCode}|${n.spreadType}|${n.lat}|${n.lon}`;
+  function signature(n: Node, selected: boolean): string {
+    return `${n.indicatorCode}|${n.spreadType}|${n.lat}|${n.lon}|${selected}`;
   }
 
   function sync(): void {
     const nodes = store.getAll();
+    const selectedId = store.getState().selectedNodeId;
     const seen = new Set<string>();
 
     for (const n of nodes) {
       seen.add(n.id);
-      const sig = signature(n);
+      const selected = n.id === selectedId;
+      const sig = signature(n, selected);
       const existing = markers.get(n.id);
       if (!existing) {
-        const marker = L.marker([n.lat, n.lon], { icon: iconFor(n) }).addTo(map);
+        const marker = L.marker([n.lat, n.lon], {
+          icon: iconFor(n, selected),
+        }).addTo(map);
+        // Click a marker to select its node; right-click to remove it.
+        marker.on("click", () => store.select(n.id));
+        marker.on("contextmenu", (e) => {
+          e.originalEvent.preventDefault();
+          store.remove(n.id);
+        });
         markers.set(n.id, { marker, sig });
       } else if (existing.sig !== sig) {
         existing.marker.setLatLng([n.lat, n.lon]);
-        existing.marker.setIcon(iconFor(n));
+        existing.marker.setIcon(iconFor(n, selected));
         existing.sig = sig;
       }
     }

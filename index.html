@@ -93,7 +93,17 @@
             </div>
             <!-- placement controls: indicator picker + spread control (v2 Stage 2) -->
             <div id="panelControls"></div>
-            <div class="empty-hint">Click the map to place your first node</div>
+
+            <!-- node list (v2 Stage 3) -->
+            <div class="nodes-h">
+              <div class="eyebrow">Nodes</div>
+              <span class="num nodes-count" style="font-size:12px;color:var(--text-faint)">0</span>
+            </div>
+            <div class="nodes" id="nodelist"></div>
+            <button class="addrow" id="addRow">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Click the map to place a node
+            </button>
           </div>
         </aside>
       </div>
