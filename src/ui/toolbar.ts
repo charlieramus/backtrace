@@ -9,6 +9,11 @@
 import L from "leaflet";
 import type { Store } from "../store";
 import { exportInvestigation, importInvestigationFile, type ImportMode } from "../io/savefile";
+import { exportGeoJson } from "../io/exportGeoJson";
+import { exportKml } from "../io/exportKml";
+import { exportGeoPackage } from "../io/exportGeoPackage";
+import { exportPdf } from "../io/exportPdf";
+import { buildSolution } from "../geo/solution";
 import { loadMarshallDemo, loadConflictingDemo, type DemoResult } from "../demo/presets";
 import { showToast } from "./toast";
 import { openModal } from "./modal";
@@ -23,14 +28,110 @@ export function initToolbar(map: L.Map, store: Store): Toolbar {
   const importBtn = document.getElementById("importBtn");
   const demoBtn = document.getElementById("loadDemoBtn");
 
-  // --- Export ---------------------------------------------------------------
-  async function onExport(): Promise<void> {
+  // --- Export menu ----------------------------------------------------------
+  // The Export control opens a frosted menu (same pattern as Load demo): the JSON
+  // investigation (existing) plus the four V7 court-ready formats. Each reads the
+  // current active nodes + latest solution, toasts, and appends an EXPORT audit entry.
+  const exportMenu = document.createElement("div");
+  exportMenu.className = "bt-menu frost";
+  exportMenu.hidden = true;
+  exportMenu.innerHTML = `
+    <button class="bt-menuitem" data-fmt="json">
+      <b>Investigation (JSON)</b>
+      <small>The full hash-sealed record — re-imports into Backtrace</small>
+    </button>
+    <div class="bt-menu-div"></div>
+    <button class="bt-menuitem" data-fmt="geojson">
+      <b>GeoJSON</b>
+      <small>Nodes, bearings, and 50/68/95 regions for any GIS</small>
+    </button>
+    <button class="bt-menuitem" data-fmt="kml">
+      <b>KML</b>
+      <small>Google Earth / GIS — spread by shape + colour</small>
+    </button>
+    <button class="bt-menuitem" data-fmt="gpkg">
+      <b>GeoPackage</b>
+      <small>Opens natively in QGIS / ArcGIS Pro (.gpkg)</small>
+    </button>
+    <button class="bt-menuitem" data-fmt="pdf">
+      <b>PDF report</b>
+      <small>Court-ready report with a methodology appendix</small>
+    </button>`;
+  document.body.appendChild(exportMenu);
+
+  function positionExportMenu(): void {
+    if (!exportBtn) return;
+    const r = exportBtn.getBoundingClientRect();
+    exportMenu.style.left = `${Math.round(Math.min(r.left, window.innerWidth - 260))}px`;
+    exportMenu.style.top = `${Math.round(r.bottom + 8)}px`;
+  }
+  function openExportMenu(): void {
+    positionExportMenu();
+    exportMenu.hidden = false;
+    exportBtn?.setAttribute("aria-expanded", "true");
+    setTimeout(() => window.addEventListener("pointerdown", onExportOutside, true), 0);
+    window.addEventListener("keydown", onExportEsc);
+  }
+  function closeExportMenu(): void {
+    exportMenu.hidden = true;
+    exportBtn?.setAttribute("aria-expanded", "false");
+    window.removeEventListener("pointerdown", onExportOutside, true);
+    window.removeEventListener("keydown", onExportEsc);
+  }
+  function onExportOutside(e: PointerEvent): void {
+    if (e.target !== exportBtn && !exportMenu.contains(e.target as HTMLElement)) closeExportMenu();
+  }
+  function onExportEsc(e: KeyboardEvent): void {
+    if (e.key === "Escape") closeExportMenu();
+  }
+  function onExportBtn(): void {
+    if (exportMenu.hidden) openExportMenu();
+    else closeExportMenu();
+  }
+
+  async function onExportMenuClick(e: MouseEvent): Promise<void> {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".bt-menuitem");
+    const fmt = btn?.dataset.fmt;
+    if (!fmt) return;
+    closeExportMenu();
+    await runExport(fmt);
+  }
+
+  async function runExport(fmt: string): Promise<void> {
     if (store.getAll().length === 0) {
       showToast("Nothing to export yet — place a node or load the demo first.", "info");
       return;
     }
-    await exportInvestigation(store); // seals record + manifest hashes before download
-    showToast("Investigation exported — hash-sealed as a JSON file.", "ok");
+    if (fmt === "json") {
+      await exportInvestigation(store); // seals record + manifest hashes before download
+      showToast("Investigation exported — hash-sealed as a JSON file.", "ok");
+      return;
+    }
+    // The four court exports all read one origin solution — a candidate region needs a
+    // crossing (≥2 bearings). Gate loudly rather than emitting an empty artifact.
+    if (!buildSolution(store)) {
+      showToast("Place at least two bearings first — a candidate region needs a crossing.", "info");
+      return;
+    }
+    try {
+      if (fmt === "geojson") {
+        exportGeoJson(store);
+        showToast("GeoJSON exported — nodes, bearings, and 50/68/95 regions.", "ok");
+      } else if (fmt === "kml") {
+        exportKml(store);
+        showToast("KML exported — opens in Google Earth / GIS.", "ok");
+      } else if (fmt === "gpkg") {
+        showToast("Generating GeoPackage…", "info");
+        await exportGeoPackage(store);
+        showToast("GeoPackage (.gpkg) exported — opens in QGIS / ArcGIS Pro.", "ok");
+      } else if (fmt === "pdf") {
+        showToast("Generating PDF report…", "info");
+        await exportPdf(store);
+        showToast("PDF report exported — court-ready with methodology appendix.", "ok");
+      }
+    } catch {
+      showToast("Export failed in this environment — nothing was written.", "error");
+    }
   }
 
   // --- Import ---------------------------------------------------------------
@@ -185,7 +286,10 @@ export function initToolbar(map: L.Map, store: Store): Toolbar {
     showToast("Cleared — back to an empty investigation.", "info");
   }
 
-  exportBtn?.addEventListener("click", onExport);
+  exportBtn?.addEventListener("click", onExportBtn);
+  exportBtn?.setAttribute("aria-haspopup", "true");
+  exportBtn?.setAttribute("aria-expanded", "false");
+  exportMenu.addEventListener("click", onExportMenuClick);
   importBtn?.addEventListener("click", onImport);
   demoBtn?.addEventListener("click", onDemoBtn);
   demoBtn?.setAttribute("aria-haspopup", "true");
@@ -195,13 +299,16 @@ export function initToolbar(map: L.Map, store: Store): Toolbar {
 
   return {
     destroy() {
-      exportBtn?.removeEventListener("click", onExport);
+      exportBtn?.removeEventListener("click", onExportBtn);
+      exportMenu.removeEventListener("click", onExportMenuClick);
       importBtn?.removeEventListener("click", onImport);
       demoBtn?.removeEventListener("click", onDemoBtn);
       menu.removeEventListener("click", onMenuClick);
       fileInput.removeEventListener("change", onFileChosen);
       closeMenu();
+      closeExportMenu();
       menu.remove();
+      exportMenu.remove();
       fileInput.remove();
     },
   };

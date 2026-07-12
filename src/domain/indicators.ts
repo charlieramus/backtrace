@@ -157,3 +157,21 @@ export function indicatorColor(code: IndicatorCode): string {
   const token = getIndicator(code)?.color;
   return token ? `var(${token})` : "var(--text-muted)";
 }
+
+// Concrete Okabe-Ito hex for each --ind-* token (mirrors src/ui/tokens.css). The court
+// exports (V7 GeoJSON/KML/GeoPackage/PDF) run DOM-free, so they can't read a CSS var —
+// they resolve the token to this fixed hex. Keep in sync with tokens.css.
+const INDICATOR_HEX: Record<string, string> = {
+  "--ind-char": "#e24a33",
+  "--ind-stain": "#e69f00",
+  "--ind-prot": "#56b4e9",
+  "--ind-soot": "#009e73",
+  "--ind-ash": "#cc79a7",
+  "--ind-grass": "#0072b2",
+};
+
+/** Concrete `#rrggbb` for an indicator (offline exports). Macro/neutral → a slate grey. */
+export function indicatorHex(code: IndicatorCode): string {
+  const token = getIndicator(code)?.color;
+  return (token && INDICATOR_HEX[token]) || "#8a8f98";
+}

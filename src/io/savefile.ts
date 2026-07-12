@@ -13,6 +13,7 @@ import { getIndicator, type IndicatorCode } from "../domain/indicators";
 import { computeRecordHash, computeManifestHash } from "../domain/recordHash";
 import { validateAuditEntry, makeAuditEntry, type AuditEntry } from "../domain/audit";
 import type { Investigator } from "../domain/investigator";
+import { buildSolution, type OriginSolution } from "../geo/solution";
 
 export const SAVE_FORMAT = "backtrace-investigation";
 export const SAVE_FORMAT_VERSION = 2; // v2 = the defensible record (full history + audit + hashes)
@@ -34,8 +35,8 @@ export interface SaveFile {
   auditLog?: AuditEntry[];
   /** Tamper-evident seal over the incident header + ordered active-node hashes (V6 S3). */
   manifestHash?: string;
-  /** Reserved for a future computed-origin export (posterior summary). */
-  solution?: unknown;
+  /** The latest computed origin solution — the V7 export substrate (posterior snapshot). */
+  solution?: OriginSolution;
 }
 
 export type ImportMode = "replace" | "merge";
@@ -52,6 +53,7 @@ export function buildSaveFile(state: InvestigationState): SaveFile {
     investigator: { ...state.investigator },
     nodes: state.nodes.map((n) => ({ ...n })),
     auditLog: state.auditLog.map((e) => ({ ...e })),
+    solution: state.solution ?? undefined,
   };
 }
 
@@ -234,7 +236,8 @@ export function parseSaveFile(
       nodes,
       auditLog,
       manifestHash,
-      solution: o.solution,
+      // Carried opaquely through the round-trip (a reproducible posterior snapshot).
+      solution: o.solution as OriginSolution | undefined,
     },
   };
 }
@@ -315,6 +318,7 @@ export function applySaveFile(store: Store, data: SaveFile, mode: ImportMode): v
       nodes: data.nodes,
       auditLog: data.auditLog,
       investigator: data.investigator,
+      solution: data.solution ?? null,
     });
     store.recordAudit({
       action: "IMPORT",
@@ -360,6 +364,8 @@ function slug(s: string): string {
 
 /** Serialize + seal the store and trigger a browser download of the JSON file. */
 export async function exportInvestigation(store: Store): Promise<void> {
+  // Recompute + persist the origin solution so the JSON carries the current snapshot.
+  store.setSolution(buildSolution(store));
   const sf = await sealSaveFile(buildSaveFile(store.getState()));
   const json = saveFileToJson(sf);
   const date = sf.exportedAtUtc.slice(0, 10);

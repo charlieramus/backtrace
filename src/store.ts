@@ -17,6 +17,7 @@ import { chainKeyOf, deriveActiveNodes } from "./domain/node";
 import { computeRecordHash } from "./domain/recordHash";
 import { makeAuditEntry, type AuditEntry, type AuditInput } from "./domain/audit";
 import { makeLocalInvestigator, type Investigator } from "./domain/investigator";
+import type { OriginSolution } from "./geo/solution";
 import type { IndicatorCode } from "./domain/indicators";
 
 /** Incident-level header. `anchor*` is the session ENU origin (set by v2's first
@@ -48,6 +49,8 @@ export interface InvestigationState {
   auditLog: AuditEntry[];
   /** Who owns this case (single-user desk default; V9 captures a real identity). */
   investigator: Investigator;
+  /** The latest computed origin solution (V7 export substrate); null until computed. */
+  solution: OriginSolution | null;
 }
 
 /** Fields a caller supplies when placing a node; the store fills id + desk
@@ -100,12 +103,17 @@ export interface Store {
   recordAudit(input: AuditInput): AuditEntry;
   /** The case's investigator (record owner). */
   getInvestigator(): Investigator;
+  /** The latest computed origin solution (V7 export substrate), or null. */
+  getSolution(): OriginSolution | null;
+  /** Persist the latest computed origin solution (exporters read this). */
+  setSolution(solution: OriginSolution | null): void;
   /** Replace the whole investigation (v5 import "replace" + demo). Clones inputs. */
   load(data: {
     incident: IncidentHeader;
     nodes: Node[];
     auditLog?: AuditEntry[];
     investigator?: Investigator;
+    solution?: OriginSolution | null;
   }): void;
   /** Reset to a fresh, empty investigation (v5 "Clear"). */
   clear(): void;
@@ -146,6 +154,7 @@ export function createStore(): Store {
     armedIndicatorCode: "ANGLE_OF_CHAR",
     auditLog: [],
     investigator: makeLocalInvestigator(),
+    solution: null,
   };
 
   const listeners = new Set<StoreListener>();
@@ -371,6 +380,13 @@ export function createStore(): Store {
 
     getAuditLog: () => state.auditLog,
     getInvestigator: () => state.investigator,
+    getSolution: () => state.solution,
+
+    // No emit: a solution is a derived snapshot the exporters cache, not UI state —
+    // emitting here would loop through the readout/map subscribers for no visual change.
+    setSolution(solution) {
+      state.solution = solution;
+    },
 
     recordAudit(input) {
       const entry = makeAuditEntry({ actorId: state.incident.createdBy ?? null, ...input });
@@ -384,6 +400,7 @@ export function createStore(): Store {
       state.nodes = data.nodes.map((n) => ({ ...n }));
       state.auditLog = (data.auditLog ?? []).map((e) => ({ ...e }));
       state.investigator = data.investigator ? { ...data.investigator } : makeLocalInvestigator();
+      state.solution = data.solution ?? null;
       state.selectedNodeId = null;
       draft = null;
       emit();
@@ -401,6 +418,7 @@ export function createStore(): Store {
       state.nodes = [];
       state.auditLog = [];
       state.investigator = makeLocalInvestigator();
+      state.solution = null;
       state.selectedNodeId = null;
       draft = null;
       emit();

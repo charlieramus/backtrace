@@ -71,7 +71,42 @@ nModes match the live readout for both demos. Report the two demos' area + mode 
 
 ## Stage 1 Report
 
-_Pending._
+Built the **origin-solution record**, the reproducible posterior snapshot every exporter reads.
+
+- **New `src/geo/solution.ts`.** `OriginSolution` carries `id`, `incidentId`, `computedUtc`,
+  `algorithm` (`GRID_VONMISES_V1`) + `algorithmVersion`, a `paramsJson` string (κ mapping
+  `FISHER_1993_INVERSION`, ε 0.15, marginFrac, grid nx/ny/cellSizeM/extent, the uniform-prior +
+  per-indicator von Mises note), `regions` `{ p50, p68, p95 }` as WGS84 GeoJSON MultiPolygons,
+  `region95AreaM2`, `posteriorEntropy`, `nModes`, `conditionNumber?`, `nNodesUsed`,
+  `modePointsWgs84[]`, and `solutionInputs[]` (`{ nodeId, weightUsed, kappaUsed, residualDeg }`).
+- **`buildSolution(store)`** runs the *existing* `computePosterior` + `hdrRegions` over
+  `store.activeNodes()` with the incident anchor — the same call the readout makes — so
+  `region95AreaM2` (`candidateAreaM2`), `posteriorEntropy`, and `nModes` (`modeCount`) are the
+  exact readout numbers, not a parallel computation. It returns `null` below two bearings (same
+  gate as the posterior).
+- **Region geometry (single ENU→WGS84 path).** Each HDR mask is traced into closed boundary rings
+  by stitching directed cell edges (filled interior kept on the left → CCW outer rings / CW holes),
+  holes are assigned to their containing outer ring by point-in-polygon, and every corner is
+  converted once via `enuToLatLon` (reusing `enu.ts` — no new projection path). `region95AreaM2`
+  stays sourced from HDR, so the headline area is exact regardless of polygon tessellation.
+- **Mode points.** Added `modePoints(g)` to `hdr.ts` (the argmax of each high-density connected
+  component, using the *same* flood fill as `modeCount`, so `modePoints().length === modeCount()`).
+  `solutionInputs.residualDeg` is each bearing's wrapped residual against the bearing to the primary
+  mode; `weightUsed` is 1 (GRID_VONMISES_V1 weights bearings equally); `kappaUsed = kappaFromSigma`.
+- **Persistence.** Added a `solution` slot to `InvestigationState` + `getSolution`/`setSolution`
+  (no emit — a derived cache, not UI state), threaded through `load`/`clear`. `SaveFile.solution`
+  is now typed `OriginSolution`; `buildSaveFile` includes `state.solution`, `parseSaveFile` carries
+  it opaquely, `applySaveFile` restores it. `exportInvestigation` recomputes + persists a fresh
+  solution before sealing, so the v2 JSON now carries the current snapshot.
+- **Test `src/geo/solution.test.ts`** (3): Marshall → p95 area equals the live readout area to 6
+  places, `nModes` 1, `nNodesUsed` 5, one persisted mode, five equal-weight inputs, and every p95
+  vertex is finite WGS84 inside the Colorado box; conflicting → `nModes` 2 (equal to `modeCount`),
+  two mode points; and the below-two-bearings null gate.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green (54 tests, +3). `buildSolution` for the two demos:
+**Marshall — region95AreaM2 19,093,443 m² (~19.1M), nModes 1, nNodesUsed 5**; **Conflicting —
+region95AreaM2 ≈ 49,635,408 m², nModes 2, nNodesUsed 4** — both matching the live readout's area +
+mode count.
 
 ---
 
@@ -101,7 +136,37 @@ placemarks + graded region polygons. Report feature counts + that both are valid
 
 ## Stage 2 Report
 
-_Pending._
+Shipped the two **pure, dependency-free** GIS exports off the Stage 1 solution.
+
+- **Shared `src/io/exportUtil.ts`.** `ensureSolution` (recompute + persist so every format reads
+  the SAME snapshot), `downloadBlob`, `exportFilename` (`backtrace-<slug>-<date>.<ext>`),
+  `recordExport` (appends the V6 `EXPORT` audit entry — format, solutionId, algorithm, area, node
+  count), and a deterministic `rayMeters`/`rayEnd` (ray length = 1.15× the farthest node→primary-mode
+  distance, floored 500 m — reproducible, unlike the map's view-scaled rays). Added `indicatorHex()`
+  to `indicators.ts` (concrete Okabe-Ito hex mirroring `tokens.css`) so the DOM-free builders resolve
+  colours without a CSS var.
+- **`src/io/exportGeoJson.ts`.** One WGS84 `FeatureCollection`, layered by a `kind` property: node
+  points (indicatorCode, spreadType, azimuthTrueDeg, sigmaDeg=effectiveSigma, azimuthMethod,
+  positionSource, hAccuracyM, investigatorConf, recordHash), bearing rays as LineStrings, the
+  p50/p68/p95 regions as (Multi)Polygons with a `level`, and the posterior mode point(s). Top-level
+  `properties` carries datum `WGS84`, algorithm + version, `region95AreaM2`, node/mode counts, and the
+  `knownErrorNote`. Geometry is read verbatim from `solution.ts` (no recompute); a mode is always
+  labelled "posterior mode of the 95% credible region" — never a bare origin.
+- **`src/io/exportKml.ts`.** The same content as OGC KML. Node placemarks are coloured by INDICATOR
+  (`IconStyle`) and carry SPREAD in the placemark `<name>` + `ExtendedData` + icon heading — spread is
+  never colour-alone (CRESEARCH.md §4.5). Regions are graded-opacity `PolyStyle` polygons (α 0xb0 →
+  0x70 → 0x38 for 50/68/95, `MultiGeometry` with inner-boundary holes). The `<Document>` description
+  states the datum, algorithm + version, candidate area, and the known ~103° error rate. Both formats'
+  `export*(store)` wrappers gate on a null solution, download, and append `EXPORT`.
+- **Tests** (`exportGeoJson.test.ts` ×4, `exportKml.test.ts` ×3): GeoJSON parses as JSON with the
+  right layer counts + finite Colorado-box coords + the no-bare-origin rule + the EXPORT audit;
+  KML is well-formed (a dependency-free tag-stack checker), has the right placemark/geometry counts,
+  carries spread in names, and grades region opacity + discloses the error rate.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green (61 tests, +7). Marshall demo — **GeoJSON: 14
+features (5 node points, 5 bearing rays, 3 credible regions, 1 mode), valid FeatureCollection,
+region95AreaM2 19,093,443 m², nodes land on ~39.95, −105.27; KML: 14 placemarks, well-formed,
+graded-opacity region polygons, spread in every node name.** Both valid for the Marshall demo.
 
 ---
 
@@ -129,7 +194,37 @@ the nodes + region layers intact. Report the gpkg table list + row counts and co
 
 ## Stage 3 Report
 
-_Pending._
+Shipped the **OGC GeoPackage** exporter — the "opens natively in QGIS/ArcGIS Pro" win.
+
+- **Dependency + offline bundling.** Added `sql.js@1.13.0` (SQLite → wasm). The wasm
+  (`sql-wasm.wasm`, **659,806 bytes ≈ 644 KB**) is copied to **`public/sql-wasm.wasm`**, so Vite
+  serves it **same-origin** and copies it verbatim into `dist/` — no CDN, no runtime fetch to a third
+  party. `loadSqlJs()` points sql.js's `locateFile` at `${import.meta.env.BASE_URL}sql-wasm.wasm`, and
+  the existing stale-while-revalidate service worker caches that same-origin asset on first use, so
+  later exports work offline (same model as the shell/fonts). A minimal ambient `src/types/sqljs.d.ts`
+  types the surface used (no `@types` dep).
+- **`src/io/exportGeoPackage.ts`.** `buildGeoPackage(SQL, sol, nodes, incident)` is the pure,
+  Node-testable core (sql.js is injected). It sets `PRAGMA application_id = 1196444487` ('GPKG') +
+  `user_version = 10200`, creates the three required OGC tables (`gpkg_spatial_ref_sys` with the
+  mandatory −1/0/4326 rows incl. the WGS 84 WKT, `gpkg_contents`, `gpkg_geometry_columns`) and two
+  feature tables — **`nodes`** (POINT + the same provenance columns as the GeoJSON) and
+  **`origin_regions`** (MULTIPOLYGON for p50/p68/p95 with a `level` + `confidence_pct`). Geometry is
+  **GeoPackageBinary** (little-endian 'GP' header, flags `0x01` no-envelope, srs 4326) wrapping ISO WKB
+  built from the solution's WGS84 rings — never a recomputed posterior. Per-table bounding boxes fill
+  `gpkg_contents.min_x…max_y`. The browser wrapper `exportGeoPackage(store)` loads the wasm, downloads
+  the `.gpkg`, and appends the `EXPORT` audit entry.
+- **Test `src/io/exportGeoPackage.test.ts`.** Builds the Marshall `.gpkg`, confirms the `SQLite` magic
+  + `application_id` 1196444487, re-opens it via sql.js, asserts the three `gpkg_*` tables + both
+  feature tables exist, row counts (nodes 5, origin_regions 3), both tables registered in
+  `gpkg_contents` (2) + `gpkg_geometry_columns` as POINT/MULTIPOLYGON in EPSG:4326, and parses a node's
+  GeoPackageBinary blob ('GP' magic) back to the Colorado demo coordinates.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green (62 tests, +1). `vite build` succeeds **with a dead
+proxy (no network)** and copies **`dist/sql-wasm.wasm` (644 KB)** verbatim from `public/` — the wasm
+is bundled as a same-origin static asset (the sql.js JS module enters the app bundle when the export
+UI wires the exporter in Stage 5). The Marshall demo exports a `.gpkg` that re-opens in the test with
+`gpkg_spatial_ref_sys` / `gpkg_contents` / `gpkg_geometry_columns` + `nodes` (5 rows) + `origin_regions`
+(3 rows), geometry intact. **Offline build confirmed.**
 
 ---
 
@@ -167,7 +262,47 @@ no-bare-coordinate rule holds.
 
 ## Stage 4 Report
 
-_Pending._
+Shipped the **court-ready PDF report** — the headline deliverable (CRESEARCH.md §4.5, §5).
+
+- **Dependency.** Added `pdf-lib@1.17.1` (pure JS, offline, no headless Chrome; ships its own types).
+- **`src/io/exportPdf.ts`.** `buildPdf(sol, nodes, incident, investigator, manifestHash)` returns PDF
+  bytes (pure, DOM-free, Node-testable). Two US-Letter pages:
+  - **Header** — incident name + agency incident no., investigator (name/agency/qualification), datum,
+    report date, app version, and a **chain-of-custody statement** (active record count, "append-only",
+    the manifest-hash prefix).
+  - **Result** — the candidate origin **AREA**: the 95% region area, field spread + normalized entropy,
+    mode count, and a geometry-quality note (good/POOR from the condition number). It states plainly
+    that this is a candidate area, not a surveyed point, with algorithm + version + node count. Mode
+    coordinates appear **only** labelled "a mode of the 95% credible region (not a surveyed origin)" —
+    **never a bare `Point of Origin: lat,lon`**.
+  - **Schematic** — a **self-drawn ENU figure drawn as vector directly on the page** (nodes as
+    spread-shaped glyphs coloured by indicator, dashed bearing rays, the 50/68/95 region rings graded
+    light→violet, a north arrow + a "nice"-rounded scale bar). Framed by reprojecting the solution's
+    WGS84 geometry back to ENU via `enu.ts`. **Deviation from the spec (noted):** rather than raster to
+    an offscreen `<canvas>` and embed a PNG, it draws the schematic as native PDF vector — there is no
+    DOM canvas offline/in Node, and vector is sharper, smaller, and reproducible. Same geometry logic,
+    no basemap tiles.
+  - **Node table** — per node: indicator, spread, azimuth, sigma (effective), method, position source,
+    h-accuracy, confidence; `conflictsCluster` rows are flagged (red + "!"), not hidden.
+  - **Methodology appendix** — the grid von Mises model + outlier mixture + Fisher κ inversion, the ENU
+    tangent plane, HDR credible regions, and — **required as a Daubert factor** — the known **~103°**
+    mean directional error (Parker & Babrauskas 2024), stated plainly, closing that the tool cannot
+    output a bare point. A short **Sources** footer (P&B, NFPA 921, Fisher 1993, WGS84/EPSG:4326).
+  - All display text is WinAnsi-safe (Greek σ/κ/λ/ε spelled out) so Helvetica encodes it. Saved with
+    `useObjectStreams:false`. The wrapper `exportPdf(store)` computes the manifest hash, downloads, and
+    appends the `EXPORT` audit entry.
+- **Test `src/io/exportPdf.test.ts`** (3): valid `%PDF-` header + non-trivial length + exactly two
+  `/Type /Page` objects; inflating the Flate content streams and decoding pdf-lib's `<hex>` Tj strings
+  confirms the p95 area number + "95% credible-region area" + `GRID_VONMISES_V1` are present, a mode is
+  labelled (no bare `Point of Origin:`), and the appendix states `103` + `Parker & Babrauskas 2024` +
+  `Daubert`. A scoped `src/types/node-zlib.d.ts` types `inflateSync` without pulling `@types/node`
+  app-wide.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green (65 tests, +3). `vite build` succeeds offline (dead
+proxy) with `pdf-lib` bundled. The Marshall demo produces a **valid 2-page PDF, 42,780 bytes**, whose
+Result shows the p95 area (19,093,443 m²) + 95% confidence + `GRID_VONMISES_V1` + 5 nodes with **no
+bare coordinate**, and whose appendix states the ~103° known error rate. **Page count 2; no-bare-
+coordinate rule holds.**
 
 ---
 
@@ -197,7 +332,42 @@ confirm NOW.md updated.
 
 ## Stage 5 Report
 
-_Pending._
+Wired the exports into the toolbar and proved the whole path coherent, end to end.
+
+- **`src/ui/toolbar.ts` — Export menu.** The "Export" control now opens a token-styled frosted
+  `.bt-menu` (same pattern + open/close/outside/Esc handling as Load-demo, `aria-haspopup`/
+  `aria-expanded` set): **Investigation (JSON)** / **GeoJSON** / **KML** / **GeoPackage** / **PDF
+  report**. On an empty store it shows an info toast (no bare export); the four court formats gate on
+  `buildSolution(store)` being non-null (≥2 bearings) with an honest "place at least two bearings"
+  toast. Each item runs its exporter on the current `activeNodes()` + latest solution, shows a success
+  toast, and appends the `EXPORT` audit entry (inside each exporter). The heavy formats
+  (**GeoPackage**, **PDF**) show a brief "Generating…" info toast first so the UI never appears frozen,
+  and the whole dispatch is wrapped so a failing export toasts an error instead of throwing.
+- **One solution, no divergence.** Every exporter reads the same `buildSolution()` output
+  (`ensureSolution` persists it via `store.setSolution`), so the five formats can't disagree. The JSON
+  save also carries that persisted solution in its v2 `solution` slot.
+- **Coherence test `src/io/exportCoherence.test.ts`.** Loads the Marshall demo, builds ONE solution,
+  and drives it through all five builders: the JSON save carries `solution.id` + area; GeoJSON's
+  `region95AreaM2`, KML's description, the GeoPackage's `origin_regions.area_m2` (re-queried via
+  sql.js), and the PDF all agree on the one region-95 area; every artifact is structurally valid
+  (`FeatureCollection` / `<kml` / `SQLite` / `%PDF-`); and the four court exports each append one
+  `EXPORT` audit entry naming that solution. Runs with no network (tests have none) — the offline proof.
+- **NOW.md updated.** Added a "Working" bullet for **court-ready export (V7)** (the versioned origin
+  solution + five offline formats, GeoPackage via bundled sql.js wasm, the PDF's methodology appendix
+  with the ~103° error rate, no bare coordinates, `EXPORT` audited), updated the stage heading, and set
+  the **Next action to V8 — About & Methodology**.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green (**66 tests**, all export + coherence tests). `vite
+build` succeeds **offline (dead proxy)** with `sql.js` + `pdf-lib` bundled (JS bundle **711.95 kB**;
+`dist/sql-wasm.wasm` **644 KB** present). The five exports all produce valid artifacts for the Marshall
+demo off one shared solution (JSON, GeoJSON, KML, `.gpkg` that re-opens in QGIS/ArcGIS, court-shaped
+PDF), and each of the four court formats appends an `EXPORT` audit entry. Live click-through of the
+menu with real browser file downloads is a browser-only action not runnable in this headless
+environment; the export path itself is exercised end-to-end via the builders, the `EXPORT` audit
+trail, and the SQLite re-open, and the offline build proves the bundle. **NOW.md updated.**
+
+_Note: per the invocation, no stages were committed or pushed — all V7 work is left in the working
+tree._
 
 ---
 

@@ -12,7 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "leaflet": "1.9.4"
+    "leaflet": "1.9.4",
+    "pdf-lib": "^1.17.1",
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@fontsource/inter": "^5.2.8",

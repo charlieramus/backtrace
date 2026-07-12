@@ -120,6 +120,67 @@ export function modeCount(g: PosteriorGrid, frac = 0.4): number {
   return count;
 }
 
+/** A candidate origin: the peak cell of one high-density connected component. */
+export interface ModePoint {
+  ix: number;
+  iy: number;
+  /** The posterior density at the peak cell. */
+  value: number;
+}
+
+/**
+ * The peak cell of every candidate origin the field supports — the argmax of each
+ * connected high-density component (cells >= frac of the global max), 8-connected,
+ * ignoring single-cell specks. Uses the SAME flood fill as modeCount(), so
+ * modePoints(g).length === modeCount(g) for any grid.
+ */
+export function modePoints(g: PosteriorGrid, frac = 0.4): ModePoint[] {
+  const { nx, ny, values } = g;
+  let max = 0;
+  for (const v of values) if (v > max) max = v;
+  if (max <= 0) return [];
+  const cut = frac * max;
+
+  const seen = new Uint8Array(nx * ny);
+  const stack: number[] = [];
+  const modes: ModePoint[] = [];
+
+  for (let start = 0; start < nx * ny; start++) {
+    if (seen[start] || values[start] < cut) continue;
+    let size = 0;
+    let peakIdx = start;
+    stack.length = 0;
+    stack.push(start);
+    seen[start] = 1;
+    while (stack.length) {
+      const idx = stack.pop()!;
+      size++;
+      if (values[idx] > values[peakIdx]) peakIdx = idx;
+      const x = idx % nx;
+      const y = (idx - x) / nx;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nxp = x + dx;
+          const nyp = y + dy;
+          if (nxp < 0 || nyp < 0 || nxp >= nx || nyp >= ny) continue;
+          const nIdx = nyp * nx + nxp;
+          if (!seen[nIdx] && values[nIdx] >= cut) {
+            seen[nIdx] = 1;
+            stack.push(nIdx);
+          }
+        }
+      }
+    }
+    if (size >= 2) {
+      const px = peakIdx % nx;
+      const py = (peakIdx - px) / nx;
+      modes.push({ ix: px, iy: py, value: values[peakIdx] });
+    }
+  }
+  return modes;
+}
+
 export interface GeometryQuality {
   /** λmax/λmin of the bearing structure matrix; large = near-parallel / ill-conditioned. */
   condition: number;

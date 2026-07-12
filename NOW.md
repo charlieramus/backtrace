@@ -4,7 +4,7 @@ Current status of the app. Updated as things change.
 
 **Last updated:** 2026-07-12
 
-## Stage: v0 shipped — desk engine + full UI, now on a court-grade record (V6)
+## Stage: v0 shipped — desk engine + full UI, court-grade record (V6), court-ready export (V7)
 
 Backtrace v0 is real, usable, and honest, and it looks like `design/mockup.reference.html`:
 a dark/light map-forward field instrument where you place fire-indicator nodes, set bearings
@@ -38,6 +38,15 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
   (CREATE/SUPERSEDE/VOID/EDIT_INCIDENT/IMPORT). Save format **v2** carries the full history +
   investigator + audit + hashes; **v1 files upgrade loudly** (a token-styled notice) and re-verify
   clean. The desk UX is unchanged — Load demo still computes the same ~19 M m² Marshall region.
+- **Court-ready export (V7).** Every export runs off one **versioned origin solution**
+  (`src/geo/solution.ts`) — a reproducible snapshot of the posterior run (algorithm `GRID_VONMISES_V1`
+  + params + inputs + the HDR 50/68/95 regions in WGS84 + area/entropy/mode count), persisted on the
+  store and carried in the v2 save file. The **Export** menu emits five formats, all **fully offline**:
+  the JSON investigation, **GeoJSON** + **KML** (pure), a **GeoPackage** (`.gpkg` via bundled `sql.js`
+  wasm — opens natively in QGIS/ArcGIS Pro), and a **court-ready PDF** (`pdf-lib`) with a self-drawn ENU
+  schematic, a node table, and a **methodology appendix disclosing the ~103° known indicator error
+  rate** (Parker & Babrauskas 2024). No export ever prints a bare coordinate — always a candidate AREA
+  with its confidence, algorithm + version, and node count; each appends an `EXPORT` audit entry.
 
 ## Decided
 
@@ -72,8 +81,8 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
 
 ## Next action
 
-Start **V7 — Court-Ready Export**: a PDF report with a methodology appendix, plus
-GeoJSON / GeoPackage / KML exporters that map straight off the V6 defensible-record schema
-(and append an `EXPORT` audit entry via the store method left ready in V6). This is what lets
-an investigator finally hand an agency a real artifact. (After V7: **V8** About/methodology
-page, **V9** live field capture filling the provenance fields, **V10** macro-constraint priors.)
+Start **V8 — About & Methodology**: the in-app page explaining why Backtrace exists, how the
+math works (grid von Mises posterior, HDR credible regions, the honest ~103° indicator error
+rate), and the sources — the honest story the V7 exports already gesture at. (After V8: **V9**
+live field capture filling the provenance fields these exports carry, **V10** macro-constraint
+priors and their inclusion in the exports.)
