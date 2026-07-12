@@ -78,7 +78,7 @@ export function normalizedEntropy(g: PosteriorGrid): number {
  * high-density mask (cells >= frac of the global max), 8-connected, ignoring single-cell
  * specks. Two separated clusters read as 2; one blob (or a broad flat field) as 1.
  */
-export function modeCount(g: PosteriorGrid, frac = 0.5): number {
+export function modeCount(g: PosteriorGrid, frac = 0.4): number {
   const { nx, ny, values } = g;
   let max = 0;
   for (const v of values) if (v > max) max = v;

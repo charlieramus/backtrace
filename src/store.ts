@@ -53,6 +53,12 @@ export interface Store {
   getIncident(): IncidentHeader;
   /** Set the session ENU anchor (the first placement's lat/lon). Used by v3/v4. */
   setAnchor(lat: number, lon: number): void;
+  /** Set the incident's display name (v5 import/demo). */
+  setIncidentName(name: string): void;
+  /** Replace the whole investigation (v5 import "replace" + demo). Clones inputs. */
+  load(data: { incident: IncidentHeader; nodes: Node[] }): void;
+  /** Reset to a fresh, empty investigation (v5 "Clear"). */
+  clear(): void;
   /** Subscribe to any state change. Returns an unsubscribe function. */
   subscribe(listener: StoreListener): () => void;
 }
@@ -145,6 +151,31 @@ export function createStore(): Store {
     setAnchor(lat, lon) {
       state.incident.anchorLat = lat;
       state.incident.anchorLon = lon;
+      emit();
+    },
+
+    setIncidentName(name) {
+      state.incident.name = name;
+      emit();
+    },
+
+    load(data) {
+      state.incident = { ...data.incident };
+      state.nodes = data.nodes.map((n) => ({ ...n }));
+      state.selectedNodeId = null;
+      emit();
+    },
+
+    clear() {
+      state.incident = {
+        id: makeId(),
+        name: "New investigation",
+        createdAtUtc: new Date().toISOString(),
+        anchorLat: null,
+        anchorLon: null,
+      };
+      state.nodes = [];
+      state.selectedNodeId = null;
       emit();
     },
 

@@ -24,6 +24,7 @@ import { initNodeList } from "./ui/NodeList";
 import { initPanelMeta } from "./ui/panelMeta";
 import { initSelectedNode } from "./ui/SelectedNode";
 import { initReadout } from "./ui/Readout";
+import { initToolbar } from "./ui/toolbar";
 import { store } from "./store";
 
 // Restore a persisted theme choice before the map mounts so the first basemap
@@ -78,3 +79,16 @@ const placement = addBtn ? initPlacement(map, store, addBtn) : null;
 // The dashed "Click the map to place a node" row also arms placement.
 const addRow = document.getElementById("addRow");
 if (addRow && placement) addRow.addEventListener("click", () => placement.arm());
+
+// Toolbar: Export / Import save files + Load demo menu + Clear.
+initToolbar(map, store);
+
+// Offline-first PWA: register the service worker (production build only, to keep the
+// dev server's HMR clean). After one online visit the app shell runs with no network.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* offline caching is a progressive enhancement; never block on it */
+    });
+  });
+}

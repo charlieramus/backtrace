@@ -17,8 +17,9 @@ export interface PanelMeta {
   destroy(): void;
 }
 
-/** Wire the panel's node count + anchor readouts to the store. */
+/** Wire the panel's title + node count + anchor readouts to the store. */
 export function initPanelMeta(store: Store): PanelMeta {
+  const titleEl = document.querySelector<HTMLElement>(".p-head h1");
   const metaEl = document.querySelector<HTMLElement>(".p-head .meta");
   const anchorEl = metaEl?.querySelector<HTMLElement>(".num") ?? null;
   const countEl = document.querySelector<HTMLElement>(".nodes-count");
@@ -26,6 +27,7 @@ export function initPanelMeta(store: Store): PanelMeta {
   function render(): void {
     const n = store.getAll().length;
     const incident = store.getIncident();
+    if (titleEl) titleEl.textContent = incident.name;
     if (metaEl) {
       // Rebuild the "N nodes · anchor " prefix, keeping the .num anchor span.
       const label = `${n} ${n === 1 ? "node" : "nodes"} · anchor `;

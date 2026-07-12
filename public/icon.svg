@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Backtrace">
+  <defs>
+    <radialGradient id="ember" cx="35%" cy="28%" r="80%">
+      <stop offset="0" stop-color="#ff9a70"/>
+      <stop offset="0.55" stop-color="#ff7a45"/>
+      <stop offset="1" stop-color="#c74e22"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0f0e0d"/>
+  <circle cx="256" cy="256" r="150" fill="url(#ember)"/>
+  <!-- the mark's notch (echoes the toolbar brand glyph) -->
+  <path d="M256 256 L256 118 A138 138 0 0 0 158 158 Z" fill="#0f0e0d" opacity="0.85"/>
+  <circle cx="300" cy="300" r="22" fill="#0f0e0d" opacity="0.9"/>
+</svg>
