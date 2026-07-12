@@ -1,8 +1,8 @@
 // Spread control — set the selected node's spread type (which swaps its marker shape
 // live). A segmented control with the four spread shapes, matching the legend's
 // meaning: advancing ▲, lateral ◆, backing ■, undetermined ●. Hidden when nothing is
-// selected. Writing store.update(id, { spreadType }) re-renders that node's marker
-// through the marker layer's subscription.
+// selected. Setting a spread supersedes the node (an append-only correction) which
+// re-renders that node's marker through the marker layer's subscription.
 
 import type { Store } from "../../store";
 import type { SpreadType } from "../../domain/node";
@@ -55,7 +55,8 @@ export function initSpreadControl(parent: HTMLElement, store: Store): SpreadCont
     if (!b || !b.dataset.spread) return;
     const sel = store.getSelected();
     if (!sel) return;
-    store.update(sel.id, { spreadType: b.dataset.spread as SpreadType });
+    if (sel.spreadType === (b.dataset.spread as SpreadType)) return;
+    store.supersede(sel.id, { spreadType: b.dataset.spread as SpreadType });
   });
 
   const unsub = store.subscribe(reflect);

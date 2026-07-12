@@ -70,3 +70,86 @@ export function openModal<T>(opts: ModalOpts<T>): Promise<T> {
     (row.querySelector<HTMLButtonElement>(".bt-mbtn.primary") ?? row.querySelector("button"))?.focus();
   });
 }
+
+export interface PromptOpts {
+  title: string;
+  message: string;
+  /** Pre-filled, editable default text (e.g. a suggested void reason). */
+  defaultValue?: string;
+  placeholder?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+}
+
+/**
+ * A token-styled text prompt (frosted card + backdrop + one input). Resolves with the
+ * trimmed text on confirm, or null on cancel / Escape / empty. Used for the void reason
+ * — chain of custody needs a stated reason, never a silent delete.
+ */
+export function openPrompt(opts: PromptOpts): Promise<string | null> {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "bt-modal-backdrop";
+
+    const card = document.createElement("div");
+    card.className = "bt-modal frost";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
+
+    const h = document.createElement("div");
+    h.className = "bt-modal-title";
+    h.textContent = opts.title;
+
+    const p = document.createElement("div");
+    p.className = "bt-modal-msg";
+    p.textContent = opts.message;
+
+    const input = document.createElement("input");
+    input.className = "bt-modal-input";
+    input.type = "text";
+    input.value = opts.defaultValue ?? "";
+    if (opts.placeholder) input.placeholder = opts.placeholder;
+
+    const row = document.createElement("div");
+    row.className = "bt-modal-actions";
+
+    let done = false;
+    const finish = (v: string | null): void => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("keydown", onKey);
+      backdrop.remove();
+      resolve(v);
+    };
+    const confirm = (): void => {
+      const t = input.value.trim();
+      finish(t === "" ? null : t);
+    };
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "bt-mbtn ghost";
+    cancelBtn.textContent = opts.cancelLabel ?? "Cancel";
+    cancelBtn.addEventListener("click", () => finish(null));
+
+    const okBtn = document.createElement("button");
+    okBtn.className = "bt-mbtn primary";
+    okBtn.textContent = opts.confirmLabel ?? "Confirm";
+    okBtn.addEventListener("click", confirm);
+
+    function onKey(e: KeyboardEvent): void {
+      if (e.key === "Escape") finish(null);
+      else if (e.key === "Enter") confirm();
+    }
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) finish(null);
+    });
+    window.addEventListener("keydown", onKey);
+
+    row.append(cancelBtn, okBtn);
+    card.append(h, p, input, row);
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+    input.focus();
+    input.select();
+  });
+}

@@ -379,6 +379,11 @@
 .bt-mbtn.primary:hover{background:rgba(255,122,69,.2)}
 .bt-mbtn.ghost{background:transparent; color:var(--text-muted)}
 .bt-mbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.bt-modal-input{
+  height:36px; padding:0 12px; border-radius:var(--r-sm); border:1px solid var(--border);
+  background:var(--inset); color:var(--text); font-size:13px; width:100%; margin-top:2px;
+}
+.bt-modal-input:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-color:var(--border-strong)}
 
 /* ---------- Load-demo menu (v5 Stage 3) ---------- */
 .bt-menu{

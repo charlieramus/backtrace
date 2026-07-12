@@ -12,6 +12,7 @@ import type { Store } from "../store";
 import type { Node, SpreadType } from "../domain/node";
 import { getIndicator, indicatorColor } from "../domain/indicators";
 import { effectiveSigma } from "../domain/node";
+import { promptVoidNode } from "./voidNode";
 
 const SPREAD_LABEL: Record<SpreadType, string> = {
   ADVANCING: "advancing",
@@ -93,7 +94,7 @@ export function initNodeList(container: HTMLElement, store: Store): NodeList {
     const id = idFrom(target);
     if (!id) return;
     if (target.closest(".remove")) {
-      store.remove(id);
+      void promptVoidNode(store, id);
     } else {
       store.select(id);
     }
@@ -105,7 +106,7 @@ export function initNodeList(container: HTMLElement, store: Store): NodeList {
     const id = idFrom(target);
     if (!id) return;
     e.preventDefault();
-    if (target.closest(".remove")) store.remove(id);
+    if (target.closest(".remove")) void promptVoidNode(store, id);
     else store.select(id);
   }
 

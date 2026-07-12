@@ -10,9 +10,12 @@
 import type { InvestigationState, IncidentHeader, Store } from "../store";
 import type { Node, SpreadType } from "../domain/node";
 import { getIndicator, type IndicatorCode } from "../domain/indicators";
+import { computeRecordHash, computeManifestHash } from "../domain/recordHash";
+import { validateAuditEntry, makeAuditEntry, type AuditEntry } from "../domain/audit";
+import type { Investigator } from "../domain/investigator";
 
 export const SAVE_FORMAT = "backtrace-investigation";
-export const SAVE_FORMAT_VERSION = 1;
+export const SAVE_FORMAT_VERSION = 2; // v2 = the defensible record (full history + audit + hashes)
 export const APP_VERSION = "0.1.0";
 export const INDICATOR_TYPE_VERSION = 1;
 
@@ -23,7 +26,14 @@ export interface SaveFile {
   indicatorTypeVersion: number;
   exportedAtUtc: string;
   incident: IncidentHeader;
+  /** The record owner (V6 S5). */
+  investigator?: Investigator;
+  /** FULL append-only node history — superseded + voided rows included (V6 S5). */
   nodes: Node[];
+  /** Append-only custody audit trail (V6 S4). */
+  auditLog?: AuditEntry[];
+  /** Tamper-evident seal over the incident header + ordered active-node hashes (V6 S3). */
+  manifestHash?: string;
   /** Reserved for a future computed-origin export (posterior summary). */
   solution?: unknown;
 }
@@ -39,7 +49,9 @@ export function buildSaveFile(state: InvestigationState): SaveFile {
     indicatorTypeVersion: INDICATOR_TYPE_VERSION,
     exportedAtUtc: new Date().toISOString(),
     incident: { ...state.incident },
+    investigator: { ...state.investigator },
     nodes: state.nodes.map((n) => ({ ...n })),
+    auditLog: state.auditLog.map((e) => ({ ...e })),
   };
 }
 
@@ -48,6 +60,19 @@ export function saveFileToJson(sf: SaveFile): string {
 }
 
 const SPREADS: SpreadType[] = ["ADVANCING", "LATERAL", "BACKING", "UNDETERMINED"];
+
+// The optional defensible-record fields (CRESEARCH.md §3) preserved through a
+// round-trip. They're carried opaquely here (V6 desk files rarely set them; V9
+// populates them); Stage 5's v2 format validates their shapes + chain integrity.
+const OPTIONAL_NODE_KEYS = [
+  "chainId", "supersedesNodeId", "voided", "voidReason",
+  "ellipsoidHeightM", "hAccuracyM", "vAccuracyM", "hdop", "pdop", "satCount", "fixType", "positionSource",
+  "azimuthMagneticDeg", "declinationDeg", "magneticModel", "modelEpoch", "gridConvergenceDeg",
+  "azimuthSigmaDeg", "azimuthMethod", "pitchDeg", "rollDeg", "captureWindowMs", "sampleCount",
+  "magAccuracyStatus", "magFieldUt", "magFieldWmmUt", "magAnomalyFlag", "dipMeasuredDeg", "dipWmmDeg",
+  "gyroRmsRadS", "fuelModel", "slopePct", "aspectDeg", "elevationM", "demSource", "investigatorConf",
+  "conflictsCluster", "createdAtUtc", "createdBy", "deviceModel", "osVersion", "appVersion", "recordHash",
+] as const;
 
 function isNumOrNull(v: unknown): v is number | null {
   return v === null || (typeof v === "number" && Number.isFinite(v));
@@ -65,23 +90,61 @@ function validateNode(raw: unknown, i: number): { ok: true; node: Node } | { ok:
     return { ok: false, error: `node ${i} has an invalid spread "${String(n.spreadType)}"` };
   if (!isNumOrNull(n.azimuthTrueDeg)) return { ok: false, error: `node ${i} has an invalid azimuth` };
   if (!isNumOrNull(n.sigmaDeg)) return { ok: false, error: `node ${i} has an invalid σ` };
+  const node: Node = {
+    id: n.id,
+    lat: n.lat,
+    lon: n.lon,
+    indicatorCode: n.indicatorCode as IndicatorCode,
+    spreadType: n.spreadType as SpreadType,
+    azimuthTrueDeg: n.azimuthTrueDeg as number | null,
+    sigmaDeg: n.sigmaDeg as number | null,
+    notes: typeof n.notes === "string" ? n.notes : "",
+  };
+  // Preserve any defensible-record provenance fields present on the row.
+  const bag = node as unknown as Record<string, unknown>;
+  for (const k of OPTIONAL_NODE_KEYS) {
+    if (n[k] !== undefined) bag[k] = n[k];
+  }
+  return { ok: true, node };
+}
+
+/** Upgrade a thin v1 node to an active court-grade record: desk defaults + provenance
+ *  nulls (a MAP_PIN placed by hand), keeping the original id/lat/lon/bearing. */
+function upgradeThinNode(n: Node, createdAtUtc: string): Node {
   return {
-    ok: true,
-    node: {
-      id: n.id,
-      lat: n.lat,
-      lon: n.lon,
-      indicatorCode: n.indicatorCode as IndicatorCode,
-      spreadType: n.spreadType as SpreadType,
-      azimuthTrueDeg: n.azimuthTrueDeg as number | null,
-      sigmaDeg: n.sigmaDeg as number | null,
-      notes: typeof n.notes === "string" ? n.notes : "",
-    },
+    ...n,
+    chainId: n.chainId ?? n.id,
+    positionSource: n.positionSource ?? "MAP_PIN",
+    fixType: n.fixType ?? "MANUAL",
+    azimuthMethod: n.azimuthMethod ?? "MANUAL",
+    voided: n.voided ?? false,
+    investigatorConf: n.investigatorConf ?? "MED",
+    conflictsCluster: n.conflictsCluster ?? false,
+    magAnomalyFlag: n.magAnomalyFlag ?? false,
+    createdAtUtc: n.createdAtUtc ?? createdAtUtc,
   };
 }
 
-/** Parse + validate a save-file JSON string. Never throws; returns a typed result. */
-export function parseSaveFile(text: string): { ok: true; data: SaveFile } | { ok: false; error: string } {
+/** Validate a raw investigator object; returns undefined if missing/malformed. */
+function validateInvestigator(raw: unknown): Investigator | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== "string" || typeof r.fullName !== "string") return undefined;
+  const inv: Investigator = { id: r.id, fullName: r.fullName };
+  if (typeof r.agency === "string") inv.agency = r.agency;
+  if (typeof r.qualification === "string") inv.qualification = r.qualification;
+  if (typeof r.certExpiry === "string") inv.certExpiry = r.certExpiry;
+  return inv;
+}
+
+/**
+ * Parse + validate a save-file JSON string. Never throws; returns a typed result. Reads
+ * both v2 (the defensible record) and v1 (upgraded LOUDLY via the `migrated` flag — the
+ * caller shows the notice + seals the hashes). Never a silent partial load.
+ */
+export function parseSaveFile(
+  text: string,
+): { ok: true; data: SaveFile; migrated: boolean } | { ok: false; error: string } {
   let obj: unknown;
   try {
     obj = JSON.parse(text);
@@ -91,8 +154,9 @@ export function parseSaveFile(text: string): { ok: true; data: SaveFile } | { ok
   if (typeof obj !== "object" || obj === null) return { ok: false, error: "This file isn't a Backtrace investigation." };
   const o = obj as Record<string, unknown>;
   if (o.format !== SAVE_FORMAT) return { ok: false, error: "Unrecognized file — not a Backtrace investigation." };
-  if (o.formatVersion !== SAVE_FORMAT_VERSION)
-    return { ok: false, error: `Unsupported file version (${String(o.formatVersion)}); this build reads v${SAVE_FORMAT_VERSION}.` };
+  if (o.formatVersion !== 1 && o.formatVersion !== 2)
+    return { ok: false, error: `Unsupported file version (${String(o.formatVersion)}); this build reads v1–v2.` };
+  const migrated = o.formatVersion === 1;
 
   const inc = o.incident as Record<string, unknown> | undefined;
   if (!inc || typeof inc.name !== "string" || typeof inc.id !== "string")
@@ -101,11 +165,11 @@ export function parseSaveFile(text: string): { ok: true; data: SaveFile } | { ok
     return { ok: false, error: "The incident anchor is malformed." };
 
   if (!Array.isArray(o.nodes)) return { ok: false, error: "The nodes list is missing or malformed." };
-  const nodes: Node[] = [];
+  const parsed: Node[] = [];
   for (let i = 0; i < o.nodes.length; i++) {
     const r = validateNode(o.nodes[i], i);
     if (!r.ok) return { ok: false, error: r.error };
-    nodes.push(r.node);
+    parsed.push(r.node);
   }
 
   const incident: IncidentHeader = {
@@ -115,27 +179,149 @@ export function parseSaveFile(text: string): { ok: true; data: SaveFile } | { ok
     anchorLat: inc.anchorLat as number | null,
     anchorLon: inc.anchorLon as number | null,
   };
+  // Carry the V6 header provenance fields when present.
+  if (typeof inc.agencyIncidentNo === "string") incident.agencyIncidentNo = inc.agencyIncidentNo;
+  if (typeof inc.datum === "string") incident.datum = inc.datum;
+  if (typeof inc.createdBy === "string") incident.createdBy = inc.createdBy;
+  if (typeof inc.discoveredAtUtc === "string") incident.discoveredAtUtc = inc.discoveredAtUtc;
+
+  let nodes: Node[];
+  let auditLog: AuditEntry[] | undefined;
+  let manifestHash: string | undefined;
+  let investigator: Investigator | undefined;
+
+  if (migrated) {
+    // Upgrade every thin v1 node to an active court-grade record, and synthesize a
+    // CREATE_NODE audit entry per node. Hashes are computed by the import flow (async).
+    nodes = parsed.map((n) => upgradeThinNode(n, incident.createdAtUtc));
+    auditLog = nodes.map((n) =>
+      makeAuditEntry({
+        action: "CREATE_NODE",
+        entity: "NODE",
+        entityId: n.id,
+        actorId: incident.createdBy ?? null,
+        after: n,
+        note: "migrated from v1",
+      }),
+    );
+  } else {
+    nodes = parsed;
+    // v2 chain integrity: every supersedesNodeId must reference an existing row.
+    const ids = new Set(nodes.map((n) => n.id));
+    for (const n of nodes) {
+      if (n.supersedesNodeId != null && !ids.has(n.supersedesNodeId))
+        return { ok: false, error: `A correction references a missing node (${n.supersedesNodeId}).` };
+    }
+    auditLog = Array.isArray(o.auditLog)
+      ? o.auditLog.map(validateAuditEntry).filter((e): e is AuditEntry => e !== null)
+      : undefined;
+    manifestHash = typeof o.manifestHash === "string" ? o.manifestHash : undefined;
+    investigator = validateInvestigator(o.investigator);
+  }
 
   return {
     ok: true,
+    migrated,
     data: {
       format: SAVE_FORMAT,
-      formatVersion: SAVE_FORMAT_VERSION,
+      formatVersion: SAVE_FORMAT_VERSION, // always upgraded to the current (v2)
       appVersion: typeof o.appVersion === "string" ? o.appVersion : APP_VERSION,
       indicatorTypeVersion:
         typeof o.indicatorTypeVersion === "number" ? o.indicatorTypeVersion : INDICATOR_TYPE_VERSION,
       exportedAtUtc: typeof o.exportedAtUtc === "string" ? o.exportedAtUtc : new Date().toISOString(),
       incident,
+      investigator,
       nodes,
+      auditLog,
+      manifestHash,
       solution: o.solution,
     },
   };
 }
 
-/** Apply a validated save file to the store, replacing or merging. */
+// --- integrity: seal (export) + verify (import) -----------------------------
+
+/** Recompute every node's recordHash + the manifest hash, returning a sealed copy. */
+export async function sealSaveFile(sf: SaveFile): Promise<SaveFile> {
+  const nodes = await Promise.all(
+    sf.nodes.map(async (n) => ({ ...n, recordHash: await computeRecordHash(n) })),
+  );
+  const manifestHash = await computeManifestHash(sf.incident, nodes);
+  return { ...sf, nodes, manifestHash };
+}
+
+export type IntegrityStatus = "verified" | "unverified" | "failed";
+export interface IntegrityResult {
+  status: IntegrityStatus;
+  /** Ids of nodes whose stored recordHash didn't match a fresh recompute. */
+  failedNodeIds: string[];
+  /** A readable, court-honest one-liner for the toast/banner. */
+  message: string;
+}
+
+/**
+ * Recompute a file's node hashes + manifest and compare to the stored seal. A file with
+ * no manifest is "unverified" (a legitimate pre-hash import — Stage 5's migration), NOT a
+ * failure. A mismatch is "failed" and names the offending node(s) — never silently ignored.
+ */
+export async function verifyIntegrity(data: SaveFile): Promise<IntegrityResult> {
+  if (!data.manifestHash) {
+    return {
+      status: "unverified",
+      failedNodeIds: [],
+      message: "Legacy file — no integrity seal to verify (pre-1.0 record).",
+    };
+  }
+  try {
+    const failed: string[] = [];
+    for (const n of data.nodes) {
+      if (typeof n.recordHash === "string") {
+        const h = await computeRecordHash(n);
+        if (h !== n.recordHash) failed.push(n.id);
+      }
+    }
+    const manifest = await computeManifestHash(data.incident, data.nodes);
+    const manifestOk = manifest === data.manifestHash;
+    if (failed.length > 0 || !manifestOk) {
+      const named = failed.length
+        ? ` (node ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""})`
+        : "";
+      return {
+        status: "failed",
+        failedNodeIds: failed,
+        message: `Integrity check FAILED${named} — this record may have been altered after export.`,
+      };
+    }
+    return {
+      status: "verified",
+      failedNodeIds: [],
+      message: "Integrity verified — every record hash and the manifest match.",
+    };
+  } catch {
+    return {
+      status: "unverified",
+      failedNodeIds: [],
+      message: "Integrity could not be checked in this environment.",
+    };
+  }
+}
+
+/** Apply a validated save file to the store, replacing or merging. Records an IMPORT
+ *  audit entry either way (replace restores the imported trail, then marks the import). */
 export function applySaveFile(store: Store, data: SaveFile, mode: ImportMode): void {
   if (mode === "replace") {
-    store.load({ incident: data.incident, nodes: data.nodes });
+    store.load({
+      incident: data.incident,
+      nodes: data.nodes,
+      auditLog: data.auditLog,
+      investigator: data.investigator,
+    });
+    store.recordAudit({
+      action: "IMPORT",
+      entity: "INVESTIGATION",
+      entityId: data.incident.id,
+      after: { mode, nodes: data.nodes.length, verified: data.manifestHash != null },
+    });
     return;
   }
   // merge: append imported nodes with fresh ids so they can't collide; adopt the
@@ -158,6 +344,12 @@ export function applySaveFile(store: Store, data: SaveFile, mode: ImportMode): v
     const cur = store.getIncident();
     if (cur.anchorLat == null || cur.anchorLon == null) store.setAnchor(added.lat, added.lon);
   }
+  store.recordAudit({
+    action: "IMPORT",
+    entity: "INVESTIGATION",
+    entityId: data.incident.id,
+    after: { mode, nodes: data.nodes.length, verified: data.manifestHash != null },
+  });
 }
 
 // --- DOM wrappers -----------------------------------------------------------
@@ -166,9 +358,9 @@ function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "investigation";
 }
 
-/** Serialize the store and trigger a browser download of the JSON file. */
-export function exportInvestigation(store: Store): void {
-  const sf = buildSaveFile(store.getState());
+/** Serialize + seal the store and trigger a browser download of the JSON file. */
+export async function exportInvestigation(store: Store): Promise<void> {
+  const sf = await sealSaveFile(buildSaveFile(store.getState()));
   const json = saveFileToJson(sf);
   const date = sf.exportedAtUtc.slice(0, 10);
   const name = `backtrace-${slug(sf.incident.name)}-${date}.json`;
@@ -183,15 +375,19 @@ export function exportInvestigation(store: Store): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** Read a File, validate, and apply it. Returns an error string on failure (else null). */
+/** Read a File, validate, verify integrity, and apply it (never a silent partial load).
+ *  Returns the parse error, or the integrity result alongside a null error on success. */
 export async function importInvestigationFile(
   store: Store,
   file: File,
   mode: ImportMode,
-): Promise<string | null> {
+): Promise<{ error: string } | { error: null; integrity: IntegrityResult; migrated: boolean }> {
   const text = await file.text();
   const parsed = parseSaveFile(text);
-  if (!parsed.ok) return parsed.error;
-  applySaveFile(store, parsed.data, mode);
-  return null;
+  if (!parsed.ok) return { error: parsed.error };
+  // A migrated v1 file has no hashes yet — seal it so the upgraded record is verifiable.
+  const data = parsed.migrated ? await sealSaveFile(parsed.data) : parsed.data;
+  const integrity = await verifyIntegrity(data);
+  applySaveFile(store, data, mode); // apply even if unverified — warn, never drop
+  return { error: null, integrity, migrated: parsed.migrated };
 }

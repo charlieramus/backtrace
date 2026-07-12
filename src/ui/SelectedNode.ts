@@ -14,7 +14,7 @@
 
 import type { Store } from "../store";
 import { getIndicator } from "../domain/indicators";
-import { effectiveSigma } from "../domain/node";
+import { effectiveSigma, chainKeyOf } from "../domain/node";
 import { initCompassRing, type CompassRingHandle } from "./CompassRing";
 
 const DRAG_ICON =
@@ -26,14 +26,16 @@ export interface SelectedNode {
 
 /** Render the selected-node bearing card into `container` and wire it to the store. */
 export function initSelectedNode(container: HTMLElement, store: Store): SelectedNode {
-  let currentId: string | null = null;
+  // Keyed by the chain head, not the row id, so a bearing/σ edit (which appends a
+  // new superseding row with a fresh id) never rebuilds the card or drops focus.
+  let currentChainId: string | null = null;
   let compass: CompassRingHandle | null = null;
   let azInput: HTMLInputElement | null = null;
   let sigInput: HTMLInputElement | null = null;
 
   function buildEmpty(): void {
     teardownCard();
-    currentId = null;
+    currentChainId = null;
     container.innerHTML =
       '<div class="selnode-empty">Select a node to set its bearing on the compass ring.</div>';
   }
@@ -45,9 +47,9 @@ export function initSelectedNode(container: HTMLElement, store: Store): Selected
     sigInput = null;
   }
 
-  function buildCard(id: string): void {
+  function buildCard(chainId: string): void {
     teardownCard();
-    const node = store.getAll().find((n) => n.id === id);
+    const node = store.getSelected();
     if (!node) return;
     const t = getIndicator(node.indicatorCode);
     const name = t?.label ?? node.indicatorCode;
@@ -86,29 +88,34 @@ export function initSelectedNode(container: HTMLElement, store: Store): Selected
       </div>`;
 
     const svg = container.querySelector<SVGSVGElement>(".compass-wrap svg")!;
+    // Dragging the dial previews live (draft overlay); pointer-up seals it as one
+    // superseding edit — so a drag records a single correction, not one per frame.
     compass = initCompassRing(svg, {
       onAzimuth: (deg) => {
         const cur = store.getSelected();
-        if (cur) store.update(cur.id, { azimuthTrueDeg: deg });
+        if (cur) store.previewEdit(cur.id, { azimuthTrueDeg: deg });
       },
+      onCommit: () => store.commitEdit(),
     });
 
     azInput = container.querySelector<HTMLInputElement>(".azin");
     sigInput = container.querySelector<HTMLInputElement>(".sigin");
 
+    // Typing previews live; blur/Enter (the input's "change") seals one edit.
     azInput?.addEventListener("input", () => {
       const cur = store.getSelected();
       if (!cur || !azInput) return;
       const raw = azInput.value.trim();
       if (raw === "") {
-        store.update(cur.id, { azimuthTrueDeg: null });
+        store.previewEdit(cur.id, { azimuthTrueDeg: null });
         return;
       }
       let v = Number(raw);
       if (!Number.isFinite(v)) return;
       v = ((Math.round(v) % 360) + 360) % 360; // wrap into 0–359
-      store.update(cur.id, { azimuthTrueDeg: v });
+      store.previewEdit(cur.id, { azimuthTrueDeg: v });
     });
+    azInput?.addEventListener("change", () => store.commitEdit());
 
     sigInput?.addEventListener("input", () => {
       const cur = store.getSelected();
@@ -118,16 +125,17 @@ export function initSelectedNode(container: HTMLElement, store: Store): Selected
       let v = Number(raw);
       if (!Number.isFinite(v)) return;
       v = Math.min(180, Math.max(1, Math.round(v)));
-      store.update(cur.id, { sigmaDeg: v });
+      store.previewEdit(cur.id, { sigmaDeg: v });
     });
+    sigInput?.addEventListener("change", () => store.commitEdit());
 
-    currentId = id;
+    currentChainId = chainId;
     patchValues(); // seed the fields + dial
   }
 
   /** Update live values in place (dial + inputs), leaving a focused input untouched. */
   function patchValues(): void {
-    const node = store.getAll().find((n) => n.id === currentId);
+    const node = store.getSelected();
     if (!node) return;
     const sig = effectiveSigma(node);
     compass?.set(node.azimuthTrueDeg, sig);
@@ -150,11 +158,12 @@ export function initSelectedNode(container: HTMLElement, store: Store): Selected
   function render(): void {
     const sel = store.getSelected();
     if (!sel) {
-      if (currentId !== null || container.childElementCount === 0) buildEmpty();
+      if (currentChainId !== null || container.childElementCount === 0) buildEmpty();
       return;
     }
-    if (sel.id !== currentId) {
-      buildCard(sel.id);
+    const chainId = chainKeyOf(sel);
+    if (chainId !== currentChainId) {
+      buildCard(chainId);
     } else {
       patchValues();
     }

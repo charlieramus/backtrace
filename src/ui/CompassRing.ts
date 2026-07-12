@@ -50,8 +50,11 @@ export interface CompassRingHandle {
 }
 
 export interface CompassRingOpts {
-  /** Called with a normalized 0–359 azimuth whenever the user drags the ring. */
+  /** Called with a normalized 0–359 azimuth whenever the user drags the ring
+   *  (a live preview — fires repeatedly during a drag). */
   onAzimuth: (deg: number) => void;
+  /** Called once when a drag/click ends, to seal the previewed bearing as one edit. */
+  onCommit?: () => void;
 }
 
 /** Wire an <svg viewBox="0 0 120 120"> into an interactive compass dial. */
@@ -193,6 +196,7 @@ export function initCompassRing(
     } catch {
       /* capture may already be released */
     }
+    opts.onCommit?.(); // seal the previewed bearing as a single superseding edit
   }
 
   svg.style.touchAction = "none";

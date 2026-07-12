@@ -87,23 +87,23 @@ describe("store", () => {
     expect(store.getSelected()).toBeNull();
   });
 
-  it("removing a node drops it and clears selection when it was selected", () => {
+  it("voiding a node drops it from the active set and clears selection", () => {
     const store = createStore();
     const a = store.add({ lat: 1, lon: 2, indicatorCode: "SOOTING" });
     const b = store.add({ lat: 3, lon: 4, indicatorCode: "STAINING" });
     store.select(b.id);
-    store.remove(b.id);
-    expect(store.getAll()).toEqual([a]);
+    store.void(b.id, "duplicate reading");
+    expect(store.getAll()).toEqual([a]); // b left the active working set
     expect(store.getSelected()).toBeNull();
   });
 
-  it("notifies subscribers on add/select/remove and stops after unsubscribe", () => {
+  it("notifies subscribers on add/select/void and stops after unsubscribe", () => {
     const store = createStore();
     let calls = 0;
     const unsub = store.subscribe(() => calls++);
     const n = store.add({ lat: 1, lon: 2, indicatorCode: "SOOTING" }); // 1
     store.select(n.id); // 2
-    store.remove(n.id); // 3
+    store.void(n.id, "test removal"); // 3
     expect(calls).toBe(3);
     unsub();
     store.add({ lat: 5, lon: 6, indicatorCode: "PROTECTION" });

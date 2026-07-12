@@ -4,7 +4,7 @@ Current status of the app. Updated as things change.
 
 **Last updated:** 2026-07-12
 
-## Stage: v0 shipped — desk engine + full UI
+## Stage: v0 shipped — desk engine + full UI, now on a court-grade record (V6)
 
 Backtrace v0 is real, usable, and honest, and it looks like `design/mockup.reference.html`:
 a dark/light map-forward field instrument where you place fire-indicator nodes, set bearings
@@ -30,6 +30,14 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
 - **Files + offline (v5).** JSON export/import (validated, no accounts), an installable
   offline-first PWA (service worker caches the app shell + tiles), the "Load demo" Colorado
   presets (Marshall + a conflicting case) and "Clear", all on-system.
+- **Defensible record (V6).** Every node is now a court-grade, **append-only** record: the
+  CRESEARCH.md §3 schema (position/orientation provenance, sensor QC, domain, chain-of-custody
+  fields — nullable, desk-defaulted to MAP_PIN/MANUAL), corrections that **supersede** rather than
+  mutate, removals that **void** with a stated reason (never delete), a **SHA-256 record hash** per
+  row + an investigation **manifest hash** verified on import, and an **append-only audit log**
+  (CREATE/SUPERSEDE/VOID/EDIT_INCIDENT/IMPORT). Save format **v2** carries the full history +
+  investigator + audit + hashes; **v1 files upgrade loudly** (a token-styled notice) and re-verify
+  clean. The desk UX is unchanged — Load demo still computes the same ~19 M m² Marshall region.
 
 ## Decided
 
@@ -64,7 +72,8 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
 
 ## Next action
 
-Start **v1 field mode**: live GPS + fused device compass, WMM2025 declination + a
-magnetic-anomaly detector, the stability gate + two-point GNSS bearing mode (`CRESEARCH.md`
-§2). Store raw azimuth, declination, and circular-SD separately per node so the desk and field
-paths share one estimator.
+Start **V7 — Court-Ready Export**: a PDF report with a methodology appendix, plus
+GeoJSON / GeoPackage / KML exporters that map straight off the V6 defensible-record schema
+(and append an `EXPORT` audit entry via the store method left ready in V6). This is what lets
+an investigator finally hand an agency a real artifact. (After V7: **V8** About/methodology
+page, **V9** live field capture filling the provenance fields, **V10** macro-constraint priors.)

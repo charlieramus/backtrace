@@ -24,13 +24,13 @@ export function initToolbar(map: L.Map, store: Store): Toolbar {
   const demoBtn = document.getElementById("loadDemoBtn");
 
   // --- Export ---------------------------------------------------------------
-  function onExport(): void {
+  async function onExport(): Promise<void> {
     if (store.getAll().length === 0) {
       showToast("Nothing to export yet — place a node or load the demo first.", "info");
       return;
     }
-    exportInvestigation(store);
-    showToast("Investigation exported as a JSON file.", "ok");
+    await exportInvestigation(store); // seals record + manifest hashes before download
+    showToast("Investigation exported — hash-sealed as a JSON file.", "ok");
   }
 
   // --- Import ---------------------------------------------------------------
@@ -60,14 +60,29 @@ export function initToolbar(map: L.Map, store: Store): Toolbar {
       if (choice === "cancel") return;
       mode = choice;
     }
-    const err = await importInvestigationFile(store, file, mode);
-    if (err) {
-      showToast(err, "error");
+    const res = await importInvestigationFile(store, file, mode);
+    if (res.error !== null) {
+      showToast(res.error, "error");
       return;
     }
     const count = store.getAll().length;
     frameToNodes();
     showToast(`Imported — ${count} node${count === 1 ? "" : "s"} loaded.`, "ok");
+    // A migrated pre-1.0 file gets a LOUD acknowledgement notice; otherwise surface the
+    // integrity verdict (a failed seal names the node; a clean seal confirms).
+    if (res.migrated) {
+      void openModal<"ok">({
+        title: "Upgraded a pre-1.0 investigation",
+        message:
+          "Imported a pre-1.0 investigation — upgraded to a defensible record (append-only, hash-sealed). Provenance fields are blank until re-captured in the field.",
+        buttons: [{ label: "Got it", value: "ok", variant: "primary" }],
+        cancelValue: "ok",
+      });
+    } else if (res.integrity.status === "failed") {
+      showToast(res.integrity.message, "error");
+    } else if (res.integrity.status === "verified") {
+      showToast(res.integrity.message, "ok");
+    }
   }
 
   function onImport(): void {

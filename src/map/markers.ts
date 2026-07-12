@@ -16,7 +16,9 @@
 import L from "leaflet";
 import type { Store } from "../store";
 import type { Node, SpreadType } from "../domain/node";
+import { chainKeyOf } from "../domain/node";
 import { indicatorColor } from "../domain/indicators";
+import { promptVoidNode } from "../ui/voidNode";
 
 const OUTLINE = "rgba(12,10,8,.9)";
 const EMBER = "#ff7a45"; // selection ring (mockup's fixed ember, both themes)
@@ -77,7 +79,8 @@ export interface MarkerLayer {
  * changed. Markers are real geo anchors, so they track pan/zoom for free.
  */
 export function initMarkers(map: L.Map, store: Store): MarkerLayer {
-  // node id -> { marker, signature } so we only rebuild an icon when it changed.
+  // chain id -> { marker, signature } — keyed by the chain so a supersede (which
+  // appends a new row id) reuses the same marker instead of churning it.
   const markers = new Map<string, { marker: L.Marker; sig: string }>();
 
   function signature(n: Node, selected: boolean): string {
@@ -85,26 +88,29 @@ export function initMarkers(map: L.Map, store: Store): MarkerLayer {
   }
 
   function sync(): void {
-    const nodes = store.getAll();
+    const nodes = store.getAll(); // active working set (latest non-voided per chain)
     const selectedId = store.getState().selectedNodeId;
     const seen = new Set<string>();
 
     for (const n of nodes) {
-      seen.add(n.id);
+      const key = chainKeyOf(n);
+      seen.add(key);
       const selected = n.id === selectedId;
       const sig = signature(n, selected);
-      const existing = markers.get(n.id);
+      const existing = markers.get(key);
       if (!existing) {
         const marker = L.marker([n.lat, n.lon], {
           icon: iconFor(n, selected),
         }).addTo(map);
-        // Click a marker to select its node; right-click to remove it.
-        marker.on("click", () => store.select(n.id));
+        // Click a marker to select its chain; right-click voids it (with a reason).
+        // select()/void() resolve any row id to the chain's live tip, so capturing
+        // this row's id here stays correct across later supersessions.
+        marker.on("click", () => store.select(key));
         marker.on("contextmenu", (e) => {
           e.originalEvent.preventDefault();
-          store.remove(n.id);
+          void promptVoidNode(store, key);
         });
-        markers.set(n.id, { marker, sig });
+        markers.set(key, { marker, sig });
       } else if (existing.sig !== sig) {
         existing.marker.setLatLng([n.lat, n.lon]);
         existing.marker.setIcon(iconFor(n, selected));
@@ -112,7 +118,7 @@ export function initMarkers(map: L.Map, store: Store): MarkerLayer {
       }
     }
 
-    // drop markers whose node is gone
+    // drop markers whose chain is gone (voided or cleared)
     for (const [id, entry] of markers) {
       if (!seen.has(id)) {
         map.removeLayer(entry.marker);
