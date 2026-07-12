@@ -222,7 +222,51 @@ the theme-swap behavior.
 
 ## Stage 3 Report
 
-_Pending._
+Replaced the mockup's faked `<canvas>` map with a real, pannable Leaflet map carrying the same
+dark, muted mood.
+
+**App frame** (`index.html`) — ported the mockup's `.app` structure, swapping the faked
+`<canvas id="map">` for a real Leaflet `<div id="map">`, followed by `.map-vignette` and the
+`.overlay` layer (empty for now; Stages 4–5 fill it). The frame CSS lives in a new
+`src/ui/app.css` (imported once from `main.ts`): `.app`, `#map`, `.map-vignette` (radial gradient
+using `var(--vignette)`), `.overlay`/`.overlay > *`, and the shared `.frost` mixin — copied from
+the mockup. Reconciliation from canvas→Leaflet: `#map` gets an explicit `z-index:0` so it forms a
+stacking context containing all of Leaflet's panes + controls, letting `.map-vignette` (`z-index:1`)
+and `.overlay` (`z-index:2`) sit cleanly above them.
+
+**Map module** (`src/map/index.ts`) — `createMap()` renders a full-viewport map centered on
+Colorado (`[39.5, -105.8]`, zoom 7). `zoomControl:false` keeps the field-instrument chrome clean
+(drag + scroll-wheel still pan/zoom). Layers:
+- **Basemaps (free, no API key):** dark = **CARTO dark-matter** (`dark_all`), light = **CARTO
+  positron** (`light_all`), both `z-index 1`.
+- **Terrain:** **Esri World Hillshade**, theme-neutral, `opacity 0.18`, `z-index 2` — gives the
+  "muted contour" topo feel over the flat basemap while staying dark and quiet. A code comment
+  notes a true dark *topo* raster (OpenTopoMap dark-filtered, or a keyed MapTiler/Thunderforest
+  topo) is a later upgrade and does not block v1.
+- **Attribution** kept but restyled via tokens in `app.css` (small, muted, frosted, rounded,
+  bottom-right).
+
+**Theme swap** — `getEffectiveTheme()` resolves an explicit `data-theme` first, else the OS
+`prefers-color-scheme`. A `MutationObserver` on `<html>`'s `data-theme` plus a `matchMedia` change
+listener swap the basemap layer (dark↔light) whenever the theme changes — so it works both for the
+OS preference and, later, Stage 4's toggle button (which doesn't exist yet, so watching the
+attribute is what makes this stage testable now).
+
+**Verify (headless Chromium via the browse skill, dev server on :5188)**
+- Map mounts: `#map .leaflet-map-pane` present, **48 tiles loaded** (CDN reachable), fills
+  1280×720, **no console errors**.
+- Default load with the browser reporting `prefers-color-scheme: light` correctly showed the
+  **light** basemap (dark-first design: OS-light → light map). Colorado is centered (Denver,
+  Boulder, Colorado Springs, Pueblo, Fort Collins all visible).
+- Forcing `data-theme="dark"`: `body` background flips to `rgb(15,14,13)` (= `--bg #0f0e0d`) and
+  `dark_all` tiles load; screenshot shows the dark CARTO basemap + hillshade ridge/mountain
+  shading + the corner **vignette** darkening — the intended dark topo mood.
+- Forcing `data-theme="light"`: `light_all` tiles load — the swap fires live off the attribute
+  change.
+- `tsc --noEmit` clean; `npm run build` succeeds (JS ~152 kB with Leaflet bundled).
+
+No deviations of substance. Note: default Leaflet zoom buttons are intentionally disabled to keep
+the mockup's clean chrome; pan/zoom remain via drag + wheel.
 
 ---
 

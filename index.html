@@ -6,7 +6,18 @@
     <title>Backtrace</title>
   </head>
   <body>
-    <div id="app"></div>
+    <!-- App frame, ported from design/mockup.reference.html. The mockup faked the
+         basemap on <canvas id="map">; the real app swaps that for a real Leaflet
+         map on <div id="map">. The .overlay holds the chrome (toolbar, panel,
+         legend, …) built in Stages 4–5. -->
+    <div class="app">
+      <div id="map"></div>
+      <div class="map-vignette"></div>
+
+      <div class="overlay" id="overlay">
+        <!-- toolbar, top-right cluster, north, scale, legend, panel land here in Stages 4–5 -->
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

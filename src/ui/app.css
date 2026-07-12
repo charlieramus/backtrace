@@ -1,0 +1,55 @@
+/*
+ * App frame + shared shell CSS, ported from design/mockup.reference.html.
+ * Grows across UPDATELOGV1.md Stages 3–5 (map frame now; toolbar/panel/legend
+ * chrome appended later). Everything is token-driven — no hard-coded colors.
+ */
+
+/* ---------- app frame ---------- */
+.app{position:fixed; inset:0}
+
+/* #map was a <canvas> in the mockup; here it hosts a real Leaflet map. Given an
+   explicit z-index so it forms a stacking context that contains all of Leaflet's
+   panes + controls, letting .map-vignette and .overlay sit cleanly above them. */
+#map{position:absolute; inset:0; width:100%; height:100%; display:block; z-index:0}
+
+.map-vignette{
+  position:absolute; inset:0; pointer-events:none; z-index:1;
+  background:radial-gradient(120% 100% at 50% 40%,transparent 55%,var(--vignette) 100%);
+}
+
+.overlay{position:absolute; inset:0; pointer-events:none; z-index:2}
+.overlay > *{pointer-events:auto}
+
+/* frosted surface mixin (shared by toolbar/panel/legend in later stages) */
+.frost{
+  background:color-mix(in srgb,var(--surface-1) 80%,transparent);
+  backdrop-filter:blur(18px) saturate(1.35);
+  -webkit-backdrop-filter:blur(18px) saturate(1.35);
+  border:1px solid var(--border);
+  box-shadow:var(--sh-2);
+}
+
+/* ---------- Leaflet integration ---------- */
+/* Match the map ground to the theme bg so tile-loading gaps stay dark/quiet. */
+.leaflet-container{
+  background:var(--bg);
+  font-family:var(--font-ui);
+  outline:none;
+}
+
+/* Keep attribution quiet and token-styled instead of the default white box. */
+.leaflet-control-attribution{
+  background:color-mix(in srgb,var(--surface-1) 78%,transparent) !important;
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:var(--text-faint) !important;
+  border:1px solid var(--border);
+  border-radius:var(--r-sm);
+  padding:2px 8px;
+  margin:0 10px 10px 0;
+  font-size:10.5px;
+  line-height:1.6;
+  box-shadow:var(--sh-1);
+}
+.leaflet-control-attribution a{color:var(--text-muted) !important; text-decoration:none}
+.leaflet-control-attribution a:hover{color:var(--accent-hi) !important}
