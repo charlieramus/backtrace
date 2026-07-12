@@ -141,7 +141,65 @@ sets the anchor. Report the placement flow and confirm markers match the mockup'
 
 ## Stage 2 Report
 
-_Pending._
+The map is placeable: arm an indicator, click to drop spread-shaped / indicator-colored
+Leaflet markers that track pan/zoom, and change a node's spread live.
+
+**Files added**
+- `src/map/markers.ts` — `initMarkers(map, store)`. One `L.marker` per node whose icon is an
+  `L.divIcon` built from the mockup's `drawMarker` shapes, mapped to a 32×32 viewBox centered
+  at (16,16) with r=13 (~26px): advancing ▲, lateral ◆, backing ■, undetermined ● (with the
+  mockup's white inner ring). Fill = `indicatorColor(code)` → `var(--ind-*)` (theme-driven),
+  outline `rgba(12,10,8,.9)` 2.5px. Subscribes to the store and diffs by a per-node signature
+  (`indicator|spread|lat|lon`), so it only rebuilds an icon when it actually changed; adds new
+  nodes, removes deleted ones. Being real geo anchors, markers track pan/zoom for free.
+- `src/map/placement.ts` — `initPlacement(map, store, addButton)`. The primary "Add node"
+  button toggles placement mode: the map gets `.bt-placing` (crosshair cursor) and the button
+  an `.active` ember state + `aria-pressed`. While armed, each map click `store.add`s a node at
+  the clicked lat/lon with the armed indicator + default `ADVANCING` spread (prior sigma flows
+  from the indicator via `effectiveSigma`); the FIRST placement calls `store.setAnchor(...)` to
+  fix the session ENU anchor on the incident header (v3/v4 origin); the placed node is selected
+  so the spread control targets it. Esc cancels; placement stays armed so several nodes drop in
+  a row.
+- `src/ui/components/indicatorPicker.ts` — `initIndicatorPicker(parent, store)`. A token-
+  consistent custom control (not a bare `<select>`): a trigger showing the armed indicator's
+  color dot + label + default sigma, and a popover listbox of all 11 indicator types. Picking
+  one calls `store.setArmedIndicator`; the trigger reflects the store (default `ANGLE_OF_CHAR`).
+  Closes on outside pointerdown / Esc.
+- `src/ui/components/spreadControl.ts` — `initSpreadControl(parent, store)`. A 4-way segmented
+  control (▲ ◆ ■ ●) for the selected node's spread; hidden when nothing is selected. Clicking
+  writes `store.update(id, { spreadType })`, which re-renders that node's marker through the
+  marker layer's subscription.
+
+**Files changed**
+- `src/store.ts` — added `setAnchor(lat, lon)` (sets the incident header anchor + emits) to the
+  `Store` interface + implementation, for the first-node anchor.
+- `src/main.ts` — captured the `createMap` return; wired `initMarkers`, the panel controls
+  (`initIndicatorPicker` + `initSpreadControl` into `#panelControls`), and `initPlacement` on
+  `.toolbar .tbtn.primary`, all against the shared `store`.
+- `index.html` — added `<div id="panelControls">` between the panel head and the empty hint as
+  the mount point for the picker + spread control.
+- `src/ui/app.css` — new Stage 2 section: `.bt-marker-icon` / `.bt-marker` (drop-shadow, strip
+  the divIcon box), `.leaflet-container.bt-placing` crosshair, the indicator picker
+  (`.ind-picker/.ind-current/.ind-menu/.ind-opt/.ind-dot/.ind-sig`), the spread control
+  (`.segmented/.seg`), and the `.tbtn.primary.active` armed state.
+- `src/domain/node.test.ts` — added a `setAnchor` store test (now 12 tests total).
+
+**Verify:** `tsc --noEmit` clean; `npm test` green (12 tests); `vite build` succeeds. Exercised
+the running app in a headless browser (gstack /browse): arming shows the crosshair + pressed
+button; clicking the map drops a char-red **advancing triangle**; swapping spread updates the
+same marker live (▲→■ rect→● circle) and the segmented control's active state; the indicator
+picker opens, re-arms (e.g. White ash σ 81°, Grass stem), and closes on pick; a second node with
+a different indicator renders in its own color; panning the map moved the marker with it
+(x 624→544), confirming geo-anchoring; no console errors. The first-node anchor is set by
+`placement.ts` + covered by the new `store.setAnchor` test (its UI surfacing — the meta line —
+is Stage 3).
+
+**Deviation / bug found + fixed during verify:** the closed indicator menu still rendered on top
+of the spread control and swallowed its clicks, because `.ind-menu { display:flex }` overrode the
+`[hidden]` attribute's UA `display:none`. Added `.ind-menu[hidden]{display:none}`. Also, to keep
+Stage 2 self-contained, placing a node auto-selects it so the spread control has a target; the
+richer two-way selection + node list + live meta line are Stage 3 as specified, so the v1
+empty-hint intentionally remains for now.
 
 ---
 

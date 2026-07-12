@@ -51,6 +51,8 @@ export interface Store {
   setArmedIndicator(code: IndicatorCode): void;
   getArmedIndicator(): IndicatorCode;
   getIncident(): IncidentHeader;
+  /** Set the session ENU anchor (the first placement's lat/lon). Used by v3/v4. */
+  setAnchor(lat: number, lon: number): void;
   /** Subscribe to any state change. Returns an unsubscribe function. */
   subscribe(listener: StoreListener): () => void;
 }
@@ -139,6 +141,12 @@ export function createStore(): Store {
 
     getArmedIndicator: () => state.armedIndicatorCode,
     getIncident: () => state.incident,
+
+    setAnchor(lat, lon) {
+      state.incident.anchorLat = lat;
+      state.incident.anchorLon = lon;
+      emit();
+    },
 
     subscribe(listener) {
       listeners.add(listener);

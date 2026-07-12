@@ -1,24 +1,46 @@
 // Backtrace app entry.
 //
-// Stage 3–4 (UPDATELOGV1.md): mount the real Leaflet map, then wire the top chrome
-// behavior (theme toggle + offline chip). The remaining static chrome (north,
-// scale, legend, panel) is added in Stage 5.
+// v1 (UPDATELOGV1.md): mount the real Leaflet map + the top chrome behavior (theme
+// toggle, offline chip).
+// v2 (UPDATELOGV2.md): make the map placeable — the indicator picker + spread
+// control in the panel, placement mode on the "Add node" button, and the geo-anchored
+// spread-shaped markers, all reading/writing the shared store.
 
 import "leaflet/dist/leaflet.css";
 import "./ui/tokens.css";
 import "./ui/app.css";
 import { createMap } from "./map";
+import { initMarkers } from "./map/markers";
+import { initPlacement } from "./map/placement";
 import { applyStoredTheme, initThemeToggle } from "./ui/theme";
 import { initOfflineChip } from "./ui/offline";
+import { initIndicatorPicker } from "./ui/components/indicatorPicker";
+import { initSpreadControl } from "./ui/components/spreadControl";
+import { store } from "./store";
 
 // Restore a persisted theme choice before the map mounts so the first basemap
 // (dark vs light) matches without a flash.
 applyStoredTheme();
 
-createMap("map");
+const map = createMap("map");
 
 const themeBtn = document.getElementById("themeBtn");
 if (themeBtn) initThemeToggle(themeBtn);
 
 const statusChip = document.getElementById("statusChip");
 if (statusChip) initOfflineChip(statusChip);
+
+// --- v2: placeable map -------------------------------------------------------
+// Geo-anchored markers driven by the store.
+initMarkers(map, store);
+
+// Panel controls: pick the armed indicator + set the selected node's spread.
+const panelControls = document.getElementById("panelControls");
+if (panelControls) {
+  initIndicatorPicker(panelControls, store);
+  initSpreadControl(panelControls, store);
+}
+
+// Placement mode: the primary "Add node" toolbar button arms map clicks.
+const addBtn = document.querySelector<HTMLElement>(".toolbar .tbtn.primary");
+if (addBtn) initPlacement(map, store, addBtn);

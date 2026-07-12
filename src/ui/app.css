@@ -170,6 +170,73 @@
   color:var(--text-faint); font-size:12.5px; line-height:1.5;
 }
 
+/* ---------- node markers (v2 Stage 2) ---------- */
+/* Leaflet divIcon wrapper: the SVG carries all the paint; drop the default box. */
+.bt-marker-icon{background:none; border:none}
+.bt-marker{display:block; overflow:visible; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+/* placement mode: crosshair cursor over the map while armed */
+.leaflet-container.bt-placing,
+.leaflet-container.bt-placing .leaflet-interactive{cursor:crosshair}
+
+/* ---------- indicator picker (v2 Stage 2) ---------- */
+.ind-picker{display:flex; flex-direction:column; gap:6px; position:relative}
+.ind-current{
+  display:flex; align-items:center; gap:9px; width:100%; padding:9px 11px;
+  border-radius:var(--r-md); border:1px solid var(--border); background:var(--fill-1);
+  color:var(--text); font-size:13.5px; font-weight:500; text-align:left;
+  transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);
+}
+.ind-current:hover{background:var(--hover); border-color:var(--border-strong)}
+.ind-current:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.ind-current svg{margin-left:auto; color:var(--text-faint); flex:none}
+.ind-dot{width:11px; height:11px; border-radius:var(--r-full); flex:none;
+  box-shadow:0 0 0 1px rgba(12,10,8,.35) inset}
+.ind-current .ind-name{flex:0 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.ind-sig{font-size:12px; color:var(--text-muted)}
+
+.ind-menu{
+  position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:5;
+  max-height:280px; overflow-y:auto; padding:6px; display:flex; flex-direction:column; gap:2px;
+  border-radius:var(--r-md); border:1px solid var(--border-strong);
+  background:color-mix(in srgb,var(--surface-1) 94%,transparent);
+  backdrop-filter:blur(18px) saturate(1.35); -webkit-backdrop-filter:blur(18px) saturate(1.35);
+  box-shadow:var(--sh-3);
+}
+/* `display:flex` above beats the [hidden] UA default (display:none), so the closed
+   menu would stay rendered over the spread control and eat its clicks — re-hide it. */
+.ind-menu[hidden]{display:none}
+.ind-menu::-webkit-scrollbar{width:8px}
+.ind-menu::-webkit-scrollbar-thumb{background:var(--scroll); border-radius:var(--r-full)}
+.ind-opt{
+  display:flex; align-items:center; gap:9px; width:100%; padding:8px 9px; text-align:left;
+  border-radius:var(--r-sm); border:1px solid transparent; background:transparent;
+  color:var(--text); font-size:13px;
+}
+.ind-opt:hover{background:var(--hover)}
+.ind-opt[aria-selected="true"]{background:var(--accent-dim); border-color:rgba(255,122,69,.32)}
+.ind-opt .ind-name{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+/* ---------- spread control (v2 Stage 2) ---------- */
+.spread-control{display:flex; flex-direction:column; gap:6px}
+.segmented{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:4px;
+  border-radius:var(--r-md); border:1px solid var(--border); background:var(--inset);
+}
+.seg{
+  display:flex; flex-direction:column; align-items:center; gap:3px; padding:7px 4px;
+  border-radius:var(--r-sm); border:1px solid transparent; background:transparent;
+  color:var(--text-muted); font-size:10.5px; font-weight:500;
+  transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease);
+}
+.seg svg{color:var(--text-faint)}
+.seg:hover{background:var(--hover); color:var(--text)}
+.seg.active{background:var(--accent-dim); color:var(--accent-hi); border-color:rgba(255,122,69,.32)}
+.seg.active svg{color:currentColor}
+.seg:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* toolbar Add-node armed state */
+.tbtn.primary.active{background:rgba(255,122,69,.28); border-color:var(--accent)}
+
 /* ---------- load-in motion (Stage 5) ---------- */
 .load-fade{animation:rise var(--dur-base) var(--ease) both}
 .toolbar{animation:rise var(--dur-base) var(--ease) both}

@@ -110,6 +110,18 @@ describe("store", () => {
     expect(calls).toBe(3);
   });
 
+  it("setAnchor records the session ENU anchor on the incident header", () => {
+    const store = createStore();
+    expect(store.getIncident().anchorLat).toBeNull();
+    expect(store.getIncident().anchorLon).toBeNull();
+    let calls = 0;
+    store.subscribe(() => calls++);
+    store.setAnchor(39.9528, -105.284);
+    expect(store.getIncident().anchorLat).toBe(39.9528);
+    expect(store.getIncident().anchorLon).toBe(-105.284);
+    expect(calls).toBe(1);
+  });
+
   it("setArmedIndicator changes the armed code and notifies", () => {
     const store = createStore();
     expect(store.getArmedIndicator()).toBe("ANGLE_OF_CHAR");
