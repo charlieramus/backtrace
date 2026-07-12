@@ -12,12 +12,16 @@ import "./ui/app.css";
 import { createMap } from "./map";
 import { initMarkers } from "./map/markers";
 import { initPlacement } from "./map/placement";
+import { initWedge } from "./map/wedge";
+import { initRays } from "./map/rays";
+import { initScaleBar } from "./map/scalebar";
 import { applyStoredTheme, initThemeToggle } from "./ui/theme";
 import { initOfflineChip } from "./ui/offline";
 import { initIndicatorPicker } from "./ui/components/indicatorPicker";
 import { initSpreadControl } from "./ui/components/spreadControl";
 import { initNodeList } from "./ui/NodeList";
 import { initPanelMeta } from "./ui/panelMeta";
+import { initSelectedNode } from "./ui/SelectedNode";
 import { store } from "./store";
 
 // Restore a persisted theme choice before the map mounts so the first basemap
@@ -33,8 +37,15 @@ const statusChip = document.getElementById("statusChip");
 if (statusChip) initOfflineChip(statusChip);
 
 // --- v2: placeable map -------------------------------------------------------
-// Geo-anchored markers driven by the store.
+// Direction layers first so they sit UNDER the markers (overlay pane): the σ wedge
+// under the bearing rays under the markers. All geo-anchored via the ENU core.
+initWedge(map, store);
+initRays(map, store);
 initMarkers(map, store);
+
+// Live scale bar reflecting the map's real scale (v3 Stage 3).
+const scaleEl = document.querySelector<HTMLElement>(".scale");
+if (scaleEl) initScaleBar(map, scaleEl);
 
 // Panel controls: pick the armed indicator + set the selected node's spread.
 const panelControls = document.getElementById("panelControls");
@@ -42,6 +53,10 @@ if (panelControls) {
   initIndicatorPicker(panelControls, store);
   initSpreadControl(panelControls, store);
 }
+
+// Selected node · bearing card (compass-ring dial + editable azimuth/σ).
+const selectedNode = document.getElementById("selectedNode");
+if (selectedNode) initSelectedNode(selectedNode, store);
 
 // Node list + live panel meta (count + anchor).
 const nodelist = document.getElementById("nodelist");

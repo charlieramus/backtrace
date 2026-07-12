@@ -40,6 +40,11 @@ function sigText(node: Node): string {
   return s == null ? "—" : `${s}°`;
 }
 
+/** The node's bearing for the subline: "284°" once set, a typographic minus before. */
+function bearingText(node: Node): string {
+  return node.azimuthTrueDeg == null ? "—" : `${Math.round(node.azimuthTrueDeg)}°`;
+}
+
 function rowHtml(node: Node, selected: boolean): string {
   const t = getIndicator(node.indicatorCode);
   const name = t?.label ?? node.indicatorCode;
@@ -49,7 +54,7 @@ function rowHtml(node: Node, selected: boolean): string {
       <span class="glyph">${glyphSvg(node.spreadType, color)}</span>
       <span class="nb">
         <span class="nt">${name}</span>
-        <span class="ns"><span class="sp">${SPREAD_LABEL[node.spreadType]}</span></span>
+        <span class="ns"><span class="sp">${SPREAD_LABEL[node.spreadType]}</span> · <span class="num">${bearingText(node)}</span></span>
       </span>
       <span class="sig">σ <b class="num">${sigText(node)}</b></span>
       <span class="iconbtn remove" role="button" tabindex="0" aria-label="Remove node" title="Remove">${REMOVE_SVG}</span>

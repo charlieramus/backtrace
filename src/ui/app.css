@@ -230,6 +230,46 @@
 /* toolbar Add-node armed state */
 .tbtn.primary.active{background:rgba(255,122,69,.28); border-color:var(--accent)}
 
+/* ---------- panel cards (ported from the mockup) ---------- */
+.card{
+  border-radius:var(--r-md); border:1px solid var(--border); background:var(--fill-1);
+  padding:14px;
+}
+.card .clab{display:flex; justify-content:space-between; align-items:baseline}
+
+/* ---------- selected node · bearing (v3 Stage 2) ---------- */
+.selnode{display:flex; gap:14px; align-items:center; margin-top:10px}
+.compass-wrap{width:120px; height:120px; flex:none; position:relative}
+.compass-wrap svg{width:100%; height:100%; display:block}
+.selfields{flex:1; min-width:0; display:flex; flex-direction:column; gap:9px}
+.field{display:flex; flex-direction:column; gap:3px}
+.field label{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint)}
+.field .val{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:7px 10px; border-radius:var(--r-sm); border:1px solid var(--border);
+  background:var(--inset); font-size:13px;
+}
+.field .val .num{font-size:14px}
+.field .val small{color:var(--text-faint); font-size:11px; flex:none}
+/* editable azimuth / σ inputs, styled to read like the mockup's static .val readings */
+.field .val input.num{
+  flex:1; min-width:0; width:100%; border:none; background:transparent; outline:none;
+  color:var(--text); font-size:14px; padding:0;
+}
+.field .val input.num::placeholder{color:var(--text-faint)}
+.field .val input.num:focus{color:var(--accent-hi)}
+/* strip the number-spinner so it stays field-instrument clean */
+.field .val input.num::-webkit-outer-spin-button,
+.field .val input.num::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+.field .val input.num[type=number]{-moz-appearance:textfield; appearance:textfield}
+.drag-hint{font-size:10.5px; color:var(--text-faint); display:flex; align-items:center; gap:5px; margin-top:10px}
+.drag-hint svg{flex:none}
+.selnode-empty{
+  font-size:11.5px; color:var(--text-faint); line-height:1.45;
+  padding:12px 12px; border-radius:var(--r-md); border:1px dashed var(--border);
+  background:var(--fill-1); text-align:center;
+}
+
 /* ---------- node list (v2 Stage 3, ported from the mockup) ---------- */
 .nodes-h{display:flex; justify-content:space-between; align-items:center}
 .nodes-h .eyebrow{color:var(--text-muted)}

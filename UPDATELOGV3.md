@@ -62,7 +62,31 @@ tests and the round-trip error you observed. This stage ships NO UI.
 
 ## Stage 1 Report
 
-_Pending._
+Built the pure ENU tangent-plane core the rest of the app stands on — no Leaflet, no DOM.
+
+**Files**
+- `src/geo/enu.ts` (new): WGS84 forward/inverse geodetic↔ECEF (`geodeticToEcef`,
+  `ecefToGeodetic` via 6-pass Bowring iteration), the ENU rotation pair
+  (`ecefToEnu` / `enuToEcef`) about a tangent-plane origin, the session-anchor helpers
+  `enuFromLatLon(lat,lon,anchor)` + inverse `enuToLatLon(e,n,anchor)`, and the azimuth
+  helpers `azToUnitEnu(azDeg) -> {e:sin, n:cos}` (§1.1 convention: East=sin, North=cos,
+  clockwise from true north) and `projectAlong(anchor, from, azDeg, meters) -> latLon`.
+  All math is in meters; lat/lon only at the boundary. A comment documents the desk-scale
+  limitation (map north treated as true north; WMM declination is v1 field-mode).
+- `src/geo/enu.test.ts` (new): round-trip, azimuth, and projection tests.
+- `src/geo/index.ts`: now `export * from "./enu"` (was a placeholder).
+
+**Verify** — `tsc --noEmit` clean; `npm test` green (17 tests, 3 files).
+- Round-trip: a point 1.45 km NE of the Marshall anchor (ENU e=1110.75 m, n=932.76 m)
+  returns to lat/lon with **3.7×10⁻⁵ m (~37 µm)** error — far below the sub-meter bar.
+  The anchor itself round-trips to <1e-6 m offset.
+- `azToUnitEnu(0)` = (0,1) due North; `azToUnitEnu(90)` = (1,0) due East; 180→−N, 270→−E.
+- `projectAlong` at az=90 moves due East (lon↑, lat fixed); at az=0 due North (lat↑).
+
+**Deviation:** the `projectAlong` distance check is asserted as a 990–1010 m band rather
+than exact-1000, because the *test's* reference distance is a spherical haversine while the
+ENU projection is WGS84-ellipsoidal — a ~2 m/km formula mismatch, not an ENU error (the
+37 µm round-trip proves the transform). No UI shipped this stage, as specified.
 
 ---
 
@@ -93,7 +117,49 @@ card matches the mockup. Report the dial interactions exercised.
 
 ## Stage 2 Report
 
-_Pending._
+Gave the selected node a bearing through the mockup's signature compass-ring dial.
+
+**Store/Node** — `azimuthTrueDeg` (0–359 | null) and editable `sigmaDeg` already existed
+on `Node` (seeded in v2 for this); the store's `update()` already emits, so every write
+re-renders the dial + node list now and will drive the v4 posterior layer. No schema change
+needed this stage.
+
+**Files**
+- `src/ui/CompassRing.ts` (new): reproduces the mockup's `compass()` SVG exactly — backing
+  disc (`var(--inset)`), outer ring (`--border-strong`), 30° ticks with heavier cardinals,
+  the cardinal "N", the vermillion σ wedge (`rgba(226,74,51,.16)` fill / `.4` stroke,
+  spanning az ± σ/2 to keep the dial's visual), the ember needle + `#ff9a70` tip, the center
+  hub, and the center degree reading in `--font-data`. All colors via `style var(…)`, so it
+  re-themes like the mockup. Drag-to-set uses Pointer Events (touch-friendly, `touch-action:
+  none`, pointer capture). The pointer→azimuth math is an exported pure helper
+  `screenVectorToAzimuth(dx,dy)`.
+- `src/ui/SelectedNode.ts` (new): the `.selnode` card — dial on the left, `.selfields` on the
+  right (Indicator name + micro/macro scale; Azimuth (true) as an editable `--font-data`
+  input; Uncertainty σ as an editable input whose small note reads "P&B 2024" when it's the
+  prior and "custom" once overridden), plus the drag hint. Shown when a node is selected,
+  else a gentle dashed empty hint. Built once per selected node and value-patched on later
+  store changes so a focused input never loses its cursor.
+- `src/ui/CompassRing.test.ts` (new): drag-geometry cases.
+- `index.html`: `<div id="selectedNode">` added between the placement controls and the node
+  list (the mockup's card slot). `src/main.ts`: `initSelectedNode(...)` wired.
+- `src/ui/app.css`: ported the mockup's `.card`/`.clab`/`.selnode`/`.compass-wrap`/
+  `.selfields`/`.field`/`.drag-hint` verbatim, plus token-styled `input.num` (borderless,
+  spinner-stripped, focus→accent) and the `.selnode-empty` hint.
+
+**Verify** — `tsc --noEmit` clean; `npm test` green (20 tests). `vite build` succeeds.
+- Drag geometry (`CompassRing.test.ts`): up→0° (N), right→90° (E), down→180° (S), left→270°
+  (W); the four diagonals→45/135/225/315; the full sweep always returns a normalized 0–359
+  integer. This is exactly the math a ring drag runs, so a drag to the East sets 90°, etc.
+- Selecting a node renders the dial + fields; deselecting shows the empty hint (store-driven
+  render path). Typing an azimuth writes `azimuthTrueDeg` (wrapped 0–359) and moves the
+  needle; editing σ writes `sigmaDeg` (clamped 1–180) and re-widens the wedge; the focused
+  input is left untouched during patching.
+
+**Deviation:** the interactive drag/type/σ behaviors were verified by the pure-geometry
+unit tests + build + code path review rather than an automated screenshot (no browser
+driver in this environment; the mockup's dial is inherently pointer-driven). The dial's σ
+wedge keeps the mockup's ± σ/2 span; the map wedge in Stage 3 uses the wider ± σ fan the
+spec calls for.
 
 ---
 
@@ -123,7 +189,42 @@ show bearings; rays/wedge match the mockup. Report the visual checks (e.g. az=90
 
 ## Stage 3 Report
 
-_Pending._
+Drew direction on the map the way the mockup does — geo-anchored through the ENU core.
+
+**Files**
+- `src/map/rays.ts` (new): a `L.layerGroup` of bearing rays. For each node with an azimuth,
+  a polyline runs from the marker along the bearing via `projectAlong(anchor, node, az, m)`.
+  Since a Leaflet stroke can't gradient, each ray is two segments — a near half at the node's
+  indicator color/alpha and a far tail at 0.4× that alpha — to read as the mockup's fade. The
+  selected ray is 2.4px solid ~0.95α; others 1.6px dashed `7 6` ~0.6α. `resolveColor()` turns
+  the `var(--ind-*)` token into a concrete stroke via `getComputedStyle`. Exports
+  `viewRayMeters(map)` (ray length = 0.4× the view diagonal, min 200 m) so rays scale with
+  zoom. Redraws on store change + `moveend`/`zoomend`; clears when the anchor is unset.
+- `src/map/wedge.ts` (new): the selected node's σ fan — a `L.polygon` sampled from the marker
+  across az−σ … az+σ (the honest, WIDE ±σ span, clamped to ±179°, ~6°/step), filled
+  low-opacity vermillion (`#e24a33`, fill 0.14 / stroke 0.35) to show how weakly one indicator
+  constrains direction.
+- `src/map/scalebar.ts` (new): makes the placeholder scale bar real — computes meters/pixel at
+  center, picks a nice 1/2/5×10ⁿ distance ≤ the bar width, sizes the four segments to it, and
+  labels it (m / km). Updates on pan/zoom.
+- `src/ui/NodeList.ts`: the subline now shows the bearing next to the spread
+  (`advancing · 284°`; `— ` until a bearing is set), matching the mockup's `.ns`.
+- `src/main.ts`: wedge → rays → markers init order (so the fan sits under the rays under the
+  markers in the overlay pane); scale bar wired to `.scale`.
+
+**Verify** — `tsc --noEmit` clean; `npm test` green (20 tests); `vite build` succeeds.
+- Direction correctness rides on the Stage-1 ENU tests: `projectAlong` at az=90 moves due East
+  and az=0 due North (sub-meter), so a node set to 90° draws a ray pointing East, and every ray
+  endpoint is a real lat/lon that tracks pan/zoom. The rays/wedge redraw on `moveend`/`zoomend`,
+  so they stay glued to the ground through pan + zoom.
+- The selected ray renders thick/solid and others thin/dashed; the selected node shows the wide
+  vermillion σ fan; the node-list sublines show each bearing; the scale bar relabels on zoom.
+
+**Deviation:** the on-screen visual pass (side-by-side pixel parity, live drag) was not scripted
+as an automated screenshot — no browser driver here — so those checks were done via the ENU
+geometry tests, the successful bundle build, and code-path review; the full running-app
+walkthrough is Stage 4 of v5. The ray fade is a two-segment opacity approximation of the mockup's
+CSS gradient (Leaflet strokes don't gradient), as the spec permits.
 
 ---
 
