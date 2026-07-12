@@ -380,7 +380,56 @@ and any pixel gaps you had to reconcile.
 
 ## Stage 5 Report
 
-_Pending._
+Finished the static shell — the app now equals the mockup's empty state. All markup was added to
+`index.html`'s `.overlay`; all CSS appended to `src/ui/app.css`, copied from the mockup.
+
+1. **North arrow** (`.compass-n.frost`) and **scale bar** (`.scale.frost`) — markup + CSS copied
+   verbatim and positioned as in the mockup: north at `top:70px; right:calc(var(--panel-w)+30px)`
+   (just left of the panel), scale at `left:18px; bottom:18px`. The north arrow is ember
+   (`fill:var(--accent)` / `--accent-hi`); the scale shows the placeholder `0 … 500 m` (v3 may make
+   it reflect real map scale).
+2. **Legend** (`.legend.frost`, bottom-left) — copied verbatim: the spread SHAPES row (▲ Advancing,
+   ◆ Lateral, ■ Backing, ● Undet.), the posterior bands strip (50/68/95 via
+   `--post-lo/-mid/-hi`), and the honest note ("Purple = candidate origin area, not a single point.
+   Color marks the indicator; shape marks spread.").
+3. **Right panel** (`.panel.frost`, rounded, scrollable, `width:var(--panel-w)`) — built the shell
+   + `.p-head` in its **empty state**: eyebrow "Investigation", `<h1>New investigation</h1>`, meta
+   line "0 nodes · anchor —" (anchor in `.num`), and the honest `.p-tag` ("An **honest posterior**
+   — a candidate area, never a single coordinate. It stays broad when the indicators disagree.").
+   The body is empty apart from a friendly empty-state hint, "Click the map to place your first
+   node", where the node list lands in v2. `.panel/.panel-scroll/.p-head/.p-tag` CSS copied verbatim.
+4. **Load-in motion** — applied the mockup's `.load-fade`/`.toolbar` rise + `.status/.legend/.scale/
+   .compass-n` fade animations and the `rise`/`fade` keyframes (deferred here from Stage 4). The
+   `prefers-reduced-motion:reduce` guard already lives in `tokens.css`. Also completed the mockup's
+   full `@media (max-width:820px)` mobile block (panel goes static, `#map` fixed, compass/legend
+   hidden).
+
+**Verify (headless Chromium via browse; `tsc --noEmit` clean; `npm run build` OK)**
+- All elements present (`compass-n`, `scale`, `legend`, `panel`), no console errors. Panel head
+  text, legend shapes, and the empty-state hint read exactly as specified.
+- **Side-by-side vs `design/mockup.reference.html`** (rendered in the same browser via `load-html`),
+  in **both** dark and light themes: the empty-state chrome — toolbar, theme toggle, offline chip,
+  north arrow, scale bar, legend, and panel head — is visually indistinguishable from the mockup in
+  position, color, radii, and copy. The map pans behind it with the vignette.
+
+**Pixel gaps reconciled (all intentional, all deferred content — not chrome mismatches):**
+- The mockup's faked warm-topo `<canvas>` map + purple posterior field + spread-shaped markers vs
+  the app's real Leaflet dark basemap + hillshade. The posterior and markers are v2–v4; a true dark
+  *topo* raster is the later upgrade Stage 3 explicitly deferred. Mood (dark, muted, contoured) is
+  matched.
+- The mockup shows the eventual **populated** panel (Marshall Fire, 6 nodes, readout card, compass
+  card, node list); v1 ships the **empty** state by design — head + tag chrome match, body carries
+  the empty hint.
+- Structural reconciliations from earlier stages remain: `#map`/`.map-vignette`/`.overlay`
+  z-indexes for Leaflet stacking (Stage 3) and the `.status-label` span wrapper (Stage 4). One
+  addition beyond the mockup: `.empty-hint` (a dashed box echoing the mockup's `.addrow` language)
+  and `.status.off` for the honest offline state.
+
+This completes UPDATELOGV1.md: the app is the mockup's empty state for real — a dark/light
+map-forward field instrument with the ember frosted toolbar, working theme toggle + offline chip,
+north arrow, scale bar, legend, and empty investigation panel, all on the shared token system over a
+real pannable Colorado map. Next (`UPDATELOGV2.md`): the domain model, click-to-place nodes, and
+the multi-color spread-shaped markers.
 
 ---
 

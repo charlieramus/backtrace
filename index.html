@@ -54,7 +54,46 @@
           </div>
         </div>
 
-        <!-- north, scale, legend, panel land here in Stage 5 -->
+        <!-- north (Stage 5) -->
+        <div class="compass-n frost">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 8 21l4-5 4 5z" style="fill:var(--accent)"/><path d="M12 3 8 21l4-5z" style="fill:var(--accent-hi)"/></svg>
+          <b style="position:absolute;top:-2px">N</b>
+        </div>
+
+        <!-- scale (Stage 5) -->
+        <div class="scale frost">
+          <div class="bar"><i></i><i></i><i></i><i></i></div>
+          <div><span class="num">0</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="num">500 m</span></div>
+        </div>
+
+        <!-- legend (Stage 5) -->
+        <div class="legend frost">
+          <div class="eyebrow">Legend</div>
+          <div class="row">
+            <div class="lg"><svg class="shp" viewBox="0 0 12 12"><path d="M6 1 11 11H1z" fill="currentColor"/></svg>Advancing</div>
+            <div class="lg"><svg class="shp" viewBox="0 0 12 12"><path d="M6 1 11 6 6 11 1 6z" fill="currentColor"/></svg>Lateral</div>
+            <div class="lg"><svg class="shp" viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="currentColor"/></svg>Backing</div>
+            <div class="lg"><svg class="shp" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg>Undet.</div>
+          </div>
+          <div>
+            <div class="bands"><i style="background:var(--post-lo)"></i><i style="background:var(--post-mid)"></i><i style="background:var(--post-hi)"></i></div>
+            <div class="band-lbl"><span>95%</span><span>68%</span><span>50%</span></div>
+          </div>
+          <div class="note"><b>Purple</b> = candidate origin area, not a single point. Color marks the indicator; shape marks spread.</div>
+        </div>
+
+        <!-- right panel — empty state (Stage 5) -->
+        <aside class="panel frost load-fade">
+          <div class="panel-scroll">
+            <div class="p-head">
+              <div class="eyebrow">Investigation</div>
+              <h1>New investigation</h1>
+              <div class="meta">0 nodes · anchor <span class="num">—</span></div>
+              <div class="p-tag">An <b>honest posterior</b> — a candidate area, never a single coordinate. It stays broad when the indicators disagree.</div>
+            </div>
+            <div class="empty-hint">Click the map to place your first node</div>
+          </div>
+        </aside>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
