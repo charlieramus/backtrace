@@ -54,11 +54,6 @@ export function logBesselI0(x: number): number {
   return ax - 0.5 * Math.log(TWO_PI * ax) + Math.log(1 + inv / 8 + (9 * inv * inv) / 128);
 }
 
-/** log of the von Mises density at residual δ with concentration κ. */
-function logVonMises(delta: number, kappa: number): number {
-  return kappa * Math.cos(delta) - LOG_2PI - logBesselI0(kappa);
-}
-
 /** Numerically stable log(e^a + e^b). */
 function logSumExp(a: number, b: number): number {
   const m = Math.max(a, b);
@@ -100,6 +95,7 @@ interface UsableNode {
   n: number;
   theta: number; // azimuth, radians
   kappa: number;
+  logNorm: number; // −log(2π) − log I₀(κ): the von Mises normalizer (constant per node)
 }
 
 /** ENU center (meters) of grid cell (ix, iy). */
@@ -136,11 +132,13 @@ export function computePosterior(nodes: Node[], opts: PosteriorOpts = {}): Poste
   const usable: UsableNode[] = bearing.map((n) => {
     const enu = enuFromLatLon(n.lat, n.lon, anchor);
     const sigmaRad = (effectiveSigma(n) as number) * DEG;
+    const kappa = kappaFromSigma(sigmaRad);
     return {
       e: enu.e,
       n: enu.n,
       theta: (n.azimuthTrueDeg as number) * DEG,
-      kappa: kappaFromSigma(sigmaRad),
+      kappa,
+      logNorm: -LOG_2PI - logBesselI0(kappa),
     };
   });
 
@@ -185,7 +183,7 @@ export function computePosterior(nodes: Node[], opts: PosteriorOpts = {}): Poste
       for (const u of usable) {
         const beta = Math.atan2(ce - u.e, cn - u.n); // bearing node -> cell
         const delta = wrapPi(u.theta - beta);
-        const logVm = logVonMises(delta, u.kappa);
+        const logVm = u.kappa * Math.cos(delta) + u.logNorm; // von Mises log-density
         logAcc += logSumExp(log1mEps + logVm, logEps);
       }
       logGrid[iy * nx + ix] = logAcc;

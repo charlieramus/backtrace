@@ -122,6 +122,19 @@ export function initPosteriorLayer(map: L.Map, store: Store): PosteriorLayer {
         if (touches) a[i] = A_FEATHER;
       }
     }
+    // Grid-edge fade: the box is a computational window, not a credible boundary. When the
+    // field reaches the box it must dissolve, not end in a hard rectangle — so taper every
+    // cell's opacity toward the outer FADE_CELLS ring. Fully-contained fields are unaffected
+    // (their edge cells are already transparent).
+    const FADE_CELLS = 4;
+    for (let y = 0; y < ny; y++) {
+      for (let x = 0; x < nx; x++) {
+        const i = y * nx + x;
+        if (a[i] <= 0) continue;
+        const d = Math.min(x, y, nx - 1 - x, ny - 1 - y);
+        if (d < FADE_CELLS) a[i] *= (d + 0.5) / FADE_CELLS;
+      }
+    }
     alpha = a;
 
     // cache cell-center lat/lon so pan/zoom repaint only re-projects (cheap), not re-solves
@@ -154,13 +167,17 @@ export function initPosteriorLayer(map: L.Map, store: Store): PosteriorLayer {
           if (!mask[y * nx + x]) continue;
           const ce = extent.minE + (x + 0.5) * cellSizeM;
           const cn = extent.minN + (y + 0.5) * cellSizeM;
-          if (x + 1 >= nx || !mask[y * nx + x + 1])
+          // Only stroke a boundary against a real in-grid neighbor that is OUTSIDE the region.
+          // A cell on the grid's own edge draws nothing there — the box is a computational
+          // window, not a credible boundary, so the ring fades out rather than being closed
+          // off by a straight line along the rectangle.
+          if (x + 1 < nx && !mask[y * nx + x + 1])
             out.push({ a: corner(ce + h, cn - h), b: corner(ce + h, cn + h), level });
-          if (x - 1 < 0 || !mask[y * nx + x - 1])
+          if (x - 1 >= 0 && !mask[y * nx + x - 1])
             out.push({ a: corner(ce - h, cn - h), b: corner(ce - h, cn + h), level });
-          if (y + 1 >= ny || !mask[(y + 1) * nx + x])
+          if (y + 1 < ny && !mask[(y + 1) * nx + x])
             out.push({ a: corner(ce - h, cn + h), b: corner(ce + h, cn + h), level });
-          if (y - 1 < 0 || !mask[(y - 1) * nx + x])
+          if (y - 1 >= 0 && !mask[(y - 1) * nx + x])
             out.push({ a: corner(ce - h, cn - h), b: corner(ce + h, cn - h), level });
         }
       }

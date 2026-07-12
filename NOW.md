@@ -47,6 +47,17 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
   schematic, a node table, and a **methodology appendix disclosing the ~103° known indicator error
   rate** (Parker & Babrauskas 2024). No export ever prints a bare coordinate — always a candidate AREA
   with its confidence, algorithm + version, and node count; each appends an `EXPORT` audit entry.
+- **In-app About / methodology (V8).** An info affordance in the chrome opens a full-screen, token-styled
+  **About overlay** (`src/ui/About.ts`) that states the app's honesty in plain language: what Backtrace
+  is, Charlie's author's note on *why* it exists (indicators carry ~103° of directional error, so a
+  confident dot would be lying — the restraint IS the product), the **honesty premise** (a probability
+  field, broad when indicators disagree, bimodal when the data supports two origins, never a bare
+  coordinate), an **investigator-readable account of the math** (ENU tangent plane, the von Mises grid
+  posterior with κ-from-σ and a 15% outlier mix, HDR credible regions, why-not-Kalman — cross-linked to
+  the live readout labels), and the **sources** (Parker & Babrauskas first, then NWCG PMS 412, NFPA 921,
+  WMM2025, Karney/GeographicLib, Rothermel/Andrews, Fisher). It themes light/dark, uses no network or
+  external assets (fully offline), and agrees in substance with the V7 PDF methodology appendix. This
+  **completes the Defensible-Record set (V6 schema → V7 export → V8 about).**
 
 ## Decided
 
@@ -81,8 +92,10 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
 
 ## Next action
 
-Start **V8 — About & Methodology**: the in-app page explaining why Backtrace exists, how the
-math works (grid von Mises posterior, HDR credible regions, the honest ~103° indicator error
-rate), and the sources — the honest story the V7 exports already gesture at. (After V8: **V9**
-live field capture filling the provenance fields these exports carry, **V10** macro-constraint
-priors and their inclusion in the exports.)
+Start **V9 — Field Mode**: wire the same store, ENU core, posterior, and design system to live
+phone sensors (GPS + fused/honest compass, WMM2025 declination + magnetic-anomaly detector,
+stability gate + two-point GNSS bearing mode — `CRESEARCH.md` §2), filling the provenance fields
+the V6 record and V7 exports already carry, so the app can be used standing in the burn, not just
+at the desk. The **Defensible-Record set (V6 schema → V7 export → V8 about) is complete** — the
+app now computes an honest posterior, exports it court-ready, and explains itself in-app. (After
+V9: **V10** macro-constraint priors and the GOA→SOA workflow, and their inclusion in the exports.)

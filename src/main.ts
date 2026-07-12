@@ -17,6 +17,7 @@ import { initWedge } from "./map/wedge";
 import { initRays } from "./map/rays";
 import { initScaleBar } from "./map/scalebar";
 import { applyStoredTheme, initThemeToggle } from "./ui/theme";
+import { initAbout } from "./ui/About";
 import { initOfflineChip } from "./ui/offline";
 import { initIndicatorPicker } from "./ui/components/indicatorPicker";
 import { initSpreadControl } from "./ui/components/spreadControl";
@@ -35,6 +36,10 @@ const map = createMap("map");
 
 const themeBtn = document.getElementById("themeBtn");
 if (themeBtn) initThemeToggle(themeBtn);
+
+// About / methodology overlay — an unobtrusive info affordance in the chrome.
+const aboutBtn = document.getElementById("aboutBtn");
+if (aboutBtn) initAbout(aboutBtn);
 
 const statusChip = document.getElementById("statusChip");
 if (statusChip) initOfflineChip(statusChip);
