@@ -370,7 +370,7 @@ export async function buildPdf(
       effectiveSigma(n) == null ? "—" : String(Math.round(effectiveSigma(n) as number)),
       (n.azimuthMethod ?? "—").slice(0, 12),
       (n.positionSource ?? "—").slice(0, 11),
-      n.hAccuracyM == null ? "—" : `${n.hAccuracyM}m`,
+      n.hAccuracyM == null ? "—" : `${Math.round(n.hAccuracyM)}m`,
       n.investigatorConf ?? "—",
     ];
     const flagged = n.conflictsCluster === true;

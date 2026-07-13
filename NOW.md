@@ -2,7 +2,7 @@
 
 Current status of the app. Updated as things change.
 
-**Last updated:** 2026-07-12
+**Last updated:** 2026-07-13
 
 ## Stage: v0 shipped — desk engine + full UI, court-grade record (V6), court-ready export (V7)
 
@@ -58,6 +58,22 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
   WMM2025, Karney/GeographicLib, Rothermel/Andrews, Fisher). It themes light/dark, uses no network or
   external assets (fully offline), and agrees in substance with the V7 PDF methodology appendix. This
   **completes the Defensible-Record set (V6 schema → V7 export → V8 about).**
+- **Field mode (V9).** Backtrace is now a field instrument for real: capture a node from where you
+  **stand in the burn**. A frosted, big-tap-target capture panel takes a **live GPS fix** (averaging a
+  stationary burst for a tighter, honest accuracy — `src/sensors/geo.ts`, `src/map/livePosition.ts`)
+  and writes a court-grade node with `positionSource DEVICE` / `fixType GNSS` / real `hAccuracyM`
+  (DOP/satCount left null — not exposed by the web API, never faked). Bearing is then set by one of
+  three methods, recommended-first: the **two-point GNSS bearing** (`src/geo/twoPointBearing.ts`) —
+  stand → fix A → walk 15–30 m → fix B → geodesic azimuth with σ propagated from fix accuracy +
+  baseline (~12° for a 20 m / 3 m capture), **magnetometer-free and the primary path**; a **caveated
+  device compass** (`src/sensors/compass.ts`) with a loud informed-consent banner, a ~2 s circular-
+  mean/SD window, tilt rejection, and a **>15° compass-vs-two-point interference flag** that keeps the
+  two-point value; or the **manual** dial. **WMM2025 declination** is computed on-device from the
+  bundled official NOAA coefficients (`src/geo/wmm.ts`, `wmm2025cof.ts`, degree-12 spherical harmonics,
+  matches NOAA to <0.01°) to convert magnetic→true, with raw magnetic + declination + model/epoch +
+  derived true stored **separately**. Every capture writes to the append-only record immediately (V6),
+  flows unchanged through the ENU core, posterior, HDR readout, and V7 exports (the PDF node table shows
+  each node's method + accuracy), and works offline.
 
 ## Decided
 
@@ -81,10 +97,15 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
   offline PWA, and JSON export/import — all wearing the mockup's field-instrument skin in
   light/dark. Demo: "Load demo" seeds the Marshall origin and shows a 95% region that
   **contains** it (honestly broad, ~19 M m²), plus a conflicting preset that reads bimodal.
-- [ ] **v1 — Field mode.** Live GPS + fused compass, WMM2025 declination + magnetic-anomaly
-  detector, stability gate + two-point GNSS bearing mode (`CRESEARCH.md` §2). Wire the same
-  store, ENU core, posterior, and design system to live phone sensors, storing raw azimuth,
-  declination, and circular-SD separately per node.
+- [x] **v1 — Field mode** (`UPDATELOGV9.md`). Shipped: live GPS capture (averaged, honest
+  accuracy), offline WMM2025 declination from the bundled NOAA coefficients, the two-point GNSS
+  bearing as the primary magnetometer-free path, a caveated device compass with a >15°
+  interference cross-check, and a capture flow that writes raw azimuth + declination + circular-SD
+  separately into the append-only record. **Deferred on purpose (native-shell, disclosed in the
+  UI):** the full magnetic-QC suite — accuracy-gated capture, uncalibrated hard-iron/anomaly
+  detection, the WMM total-field anomaly detector, and the figure-8 calibration gate
+  (`CRESEARCH.md` §2.2–2.3) — because a PWA cannot read magnetometer accuracy status, hard-iron
+  bias, or raw field magnitude honestly. The web build discloses this and steers to two-point GNSS.
 - [ ] **v2 — Macro constraints.** Macro indicators as priors, GOA→SOA workflow
   (`CRESEARCH.md` §4.1). Offline vector basemaps (PMTiles).
 - [ ] **v3 — Forward model + real exports.** Slope-aware Rothermel back-projection
@@ -92,10 +113,13 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
 
 ## Next action
 
-Start **V9 — Field Mode**: wire the same store, ENU core, posterior, and design system to live
-phone sensors (GPS + fused/honest compass, WMM2025 declination + magnetic-anomaly detector,
-stability gate + two-point GNSS bearing mode — `CRESEARCH.md` §2), filling the provenance fields
-the V6 record and V7 exports already carry, so the app can be used standing in the burn, not just
-at the desk. The **Defensible-Record set (V6 schema → V7 export → V8 about) is complete** — the
-app now computes an honest posterior, exports it court-ready, and explains itself in-app. (After
-V9: **V10** macro-constraint priors and the GOA→SOA workflow, and their inclusion in the exports.)
+Start **V10 — Macro Priors (GOA→SOA)**: fold macro evidence in as Bayesian **priors** where
+`CRESEARCH.md` §4.1 says most of the actual information lives. A macro constraint (a V apex, burn
+perimeter, witness first-smoke cone, first-report location, exclusion zone) is a region-shaped
+prior over the origin, not a ray — `log_post = log_prior_from_macro + Σ log_likelihood_micro`, with
+a hard invariant that no macro constraints = byte-for-byte the v0 result. Add the append-only
+constraint model + store, the prior field, its fusion into the posterior, the GOA→SOA drawing
+tools, and inclusion in the exports. **Field mode (V9) is complete** — the app now captures a node
+from where you stand (live GPS + honest bearing) into the append-only record and carries it through
+the court-ready exports. (After V10: the slope-aware forward model + wind — `CRESEARCH.md`
+§4.2–4.4 — the next major, explicitly deferred, research-grade build.)
