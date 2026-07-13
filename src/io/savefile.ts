@@ -10,6 +10,8 @@
 import type { InvestigationState, IncidentHeader, Store } from "../store";
 import type { Node, SpreadType } from "../domain/node";
 import { getIndicator, type IndicatorCode } from "../domain/indicators";
+import type { MacroConstraint } from "../domain/macro";
+import { validateMacroConstraint, computeMacroHash } from "../domain/macro";
 import { computeRecordHash, computeManifestHash } from "../domain/recordHash";
 import { validateAuditEntry, makeAuditEntry, type AuditEntry } from "../domain/audit";
 import type { Investigator } from "../domain/investigator";
@@ -31,6 +33,8 @@ export interface SaveFile {
   investigator?: Investigator;
   /** FULL append-only node history — superseded + voided rows included (V6 S5). */
   nodes: Node[];
+  /** FULL append-only macro-constraint history (V10) — priors carried with the investigation. */
+  macroConstraints?: MacroConstraint[];
   /** Append-only custody audit trail (V6 S4). */
   auditLog?: AuditEntry[];
   /** Tamper-evident seal over the incident header + ordered active-node hashes (V6 S3). */
@@ -52,6 +56,7 @@ export function buildSaveFile(state: InvestigationState): SaveFile {
     incident: { ...state.incident },
     investigator: { ...state.investigator },
     nodes: state.nodes.map((n) => ({ ...n })),
+    macroConstraints: state.macroConstraints.map((m) => ({ ...m })),
     auditLog: state.auditLog.map((e) => ({ ...e })),
     solution: state.solution ?? undefined,
   };
@@ -191,6 +196,10 @@ export function parseSaveFile(
   let auditLog: AuditEntry[] | undefined;
   let manifestHash: string | undefined;
   let investigator: Investigator | undefined;
+  // Macro constraints (V10) exist only in v2 files; a migrated v1 file has none.
+  const macroConstraints: MacroConstraint[] = Array.isArray(o.macroConstraints)
+    ? (o.macroConstraints.map(validateMacroConstraint).filter((m): m is MacroConstraint => m !== null))
+    : [];
 
   if (migrated) {
     // Upgrade every thin v1 node to an active court-grade record, and synthesize a
@@ -234,6 +243,7 @@ export function parseSaveFile(
       incident,
       investigator,
       nodes,
+      macroConstraints,
       auditLog,
       manifestHash,
       // Carried opaquely through the round-trip (a reproducible posterior snapshot).
@@ -249,8 +259,11 @@ export async function sealSaveFile(sf: SaveFile): Promise<SaveFile> {
   const nodes = await Promise.all(
     sf.nodes.map(async (n) => ({ ...n, recordHash: await computeRecordHash(n) })),
   );
+  const macroConstraints = sf.macroConstraints
+    ? await Promise.all(sf.macroConstraints.map(async (m) => ({ ...m, recordHash: await computeMacroHash(m) })))
+    : undefined;
   const manifestHash = await computeManifestHash(sf.incident, nodes);
-  return { ...sf, nodes, manifestHash };
+  return { ...sf, nodes, macroConstraints, manifestHash };
 }
 
 export type IntegrityStatus = "verified" | "unverified" | "failed";
@@ -316,6 +329,7 @@ export function applySaveFile(store: Store, data: SaveFile, mode: ImportMode): v
     store.load({
       incident: data.incident,
       nodes: data.nodes,
+      macroConstraints: data.macroConstraints,
       auditLog: data.auditLog,
       investigator: data.investigator,
       solution: data.solution ?? null,

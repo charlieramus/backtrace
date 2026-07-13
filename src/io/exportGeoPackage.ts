@@ -12,6 +12,7 @@
 import type { Store, IncidentHeader } from "../store";
 import type { Node } from "../domain/node";
 import { effectiveSigma } from "../domain/node";
+import type { MacroConstraint, MacroGeometry } from "../domain/macro";
 import type { OriginSolution, MultiPolygon } from "../geo/solution";
 import initSqlJs, { type SqlJsStatic } from "sql.js";
 import { ensureSolution, downloadBlob, exportFilename, recordExport } from "./exportUtil";
@@ -67,6 +68,19 @@ function multiPolygonWkb(mp: MultiPolygon): number[] {
   return out;
 }
 
+function lineStringWkb(coords: number[][]): number[] {
+  const out: number[] = [0x01, ...u32le(2), ...u32le(coords.length)];
+  for (const [lon, lat] of coords) out.push(...f64le(lon), ...f64le(lat));
+  return out;
+}
+
+/** WKB for a macro constraint's WGS84 GeoJSON geometry (Point/LineString/Polygon). */
+function macroWkb(g: MacroGeometry): number[] {
+  if (g.type === "Point") return pointWkb(g.coordinates[0], g.coordinates[1]);
+  if (g.type === "LineString") return lineStringWkb(g.coordinates);
+  return polygonWkb(g.coordinates);
+}
+
 function gpkgGeom(wkb: number[]): Uint8Array {
   return Uint8Array.from([...gpkgHeader(), ...wkb]);
 }
@@ -104,6 +118,7 @@ export function buildGeoPackage(
   sol: OriginSolution,
   nodes: Node[],
   incident: IncidentHeader,
+  macros: MacroConstraint[] = [],
 ): Uint8Array {
   const db = new SQL.Database();
   try {
@@ -199,11 +214,42 @@ export function buildGeoPackage(
       );
     }
 
+    // Macro constraints (V10) — priors over the origin, mixed geometry (GEOMETRY type).
+    const macroBbox = emptyBbox();
+    if (macros.length > 0) {
+      db.run(
+        `CREATE TABLE macro_constraints (
+          fid INTEGER PRIMARY KEY AUTOINCREMENT, geom BLOB, macro_id TEXT, kind TEXT,
+          source TEXT, weight REAL, bearing_deg REAL, spread_deg REAL, radius_m REAL,
+          notes TEXT, record_hash TEXT);`,
+      );
+      for (const m of macros) {
+        // grow the bbox from the geometry's coordinates
+        const g = m.geometry;
+        if (g.type === "Point") grow(macroBbox, g.coordinates[0], g.coordinates[1]);
+        else if (g.type === "LineString") for (const [lo, la] of g.coordinates) grow(macroBbox, lo, la);
+        else for (const ring of g.coordinates) for (const [lo, la] of ring) grow(macroBbox, lo, la);
+        db.run(
+          `INSERT INTO macro_constraints
+            (geom, macro_id, kind, source, weight, bearing_deg, spread_deg, radius_m, notes, record_hash)
+           VALUES (?,?,?,?,?,?,?,?,?,?);`,
+          [
+            gpkgGeom(macroWkb(m.geometry)),
+            m.id, m.kind, m.source, m.weight,
+            m.bearingDeg ?? null, m.spreadDeg ?? null, m.radiusM ?? null,
+            m.notes, m.recordHash ?? null,
+          ],
+        );
+      }
+    }
+
     const now = new Date().toISOString();
     const contents: Array<[string, string, string, string, Bbox]> = [
       ["nodes", "features", `${incident.name} — indicator nodes`, "Placed fire-pattern indicator nodes", nodesBbox],
       ["origin_regions", "features", `${incident.name} — credible regions`, "HDR 50/68/95 candidate-origin regions", regionsBbox],
     ];
+    if (macros.length > 0)
+      contents.push(["macro_constraints", "features", `${incident.name} — macro priors`, "Macro constraints consumed as a Bayesian prior over the origin", macroBbox]);
     for (const [table, type, ident, desc, bb] of contents) {
       const finite = Number.isFinite(bb.minX);
       db.run(
@@ -225,6 +271,8 @@ export function buildGeoPackage(
         ('origin_regions','geom','MULTIPOLYGON',?,0,0);`,
       [SRS_WGS84, SRS_WGS84],
     );
+    if (macros.length > 0)
+      db.run(`INSERT INTO gpkg_geometry_columns VALUES ('macro_constraints','geom','GEOMETRY',?,0,0);`, [SRS_WGS84]);
 
     return db.export();
   } finally {
@@ -251,7 +299,7 @@ export async function exportGeoPackage(store: Store): Promise<void> {
   const incident = store.getIncident();
   if (!sol) return;
   const SQL = await loadSqlJs();
-  const bytes = buildGeoPackage(SQL, sol, store.activeNodes(), incident);
+  const bytes = buildGeoPackage(SQL, sol, store.activeNodes(), incident, store.activeMacros());
   downloadBlob(bytes, exportFilename(incident.name, "gpkg"), "application/geopackage+sqlite3");
   recordExport(store, "gpkg", sol);
 }

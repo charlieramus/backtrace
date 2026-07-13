@@ -50,7 +50,8 @@ export function initReadout(container: HTMLElement, store: Store): Readout {
 
   function render(): void {
     const a = anchor();
-    const g = computePosterior(store.getAll(), a ? { anchor: a } : {});
+    const macros = store.activeMacros();
+    const g = computePosterior(store.getAll(), { ...(a ? { anchor: a } : {}), constraints: macros });
     if (!g) {
       renderEmpty();
       return;
@@ -82,6 +83,12 @@ export function initReadout(container: HTMLElement, store: Store): Readout {
       ? `<div class="readout-banner">Poor geometry — the bearings are near-parallel, so the crossing is ill-conditioned. Collect a node from a different sector before trusting this area.</div>`
       : "";
 
+    // Honest note when a macro prior is shaping the region (not just the rays).
+    const priorNote =
+      macros.length > 0
+        ? `<div class="hint">Origin area informed by <span class="num">${macros.length}</span> macro constraint${macros.length === 1 ? "" : "s"} (prior × likelihood).</div>`
+        : "";
+
     container.innerHTML = `
       <div class="card">
         <div class="clab"><div class="eyebrow">Candidate area · 95%</div></div>
@@ -95,6 +102,7 @@ export function initReadout(container: HTMLElement, store: Store): Readout {
           ${modeChip}
           ${geomChip}
         </div>
+        ${priorNote}
         ${banner}
       </div>`;
   }

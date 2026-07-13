@@ -10,6 +10,7 @@ import type { Store } from "../store";
 import type { IncidentHeader } from "../store";
 import type { Node } from "../domain/node";
 import { effectiveSigma } from "../domain/node";
+import type { MacroConstraint } from "../domain/macro";
 import type { LatLon } from "../geo/enu";
 import type { OriginSolution, MultiPolygon } from "../geo/solution";
 import { APP_VERSION } from "./savefile";
@@ -90,6 +91,26 @@ function regionFeature(mp: MultiPolygon, level: number, sol: OriginSolution): Fe
   };
 }
 
+function macroFeature(m: MacroConstraint): Feature {
+  return {
+    type: "Feature",
+    geometry: m.geometry,
+    properties: {
+      kind: "macro",
+      id: m.id,
+      macroKind: m.kind,
+      source: m.source,
+      weight: m.weight,
+      bearingDeg: m.bearingDeg ?? null,
+      spreadDeg: m.spreadDeg ?? null,
+      radiusM: m.radiusM ?? null,
+      notes: m.notes,
+      role: "Bayesian prior over the origin (not a ray) — fused as log_prior + Σ log_likelihood.",
+      recordHash: m.recordHash ?? null,
+    },
+  };
+}
+
 function modeFeature(p: LatLon, i: number, sol: OriginSolution): Feature {
   return {
     type: "Feature",
@@ -112,6 +133,7 @@ export function buildGeoJson(
   sol: OriginSolution,
   nodes: Node[],
   incident: IncidentHeader,
+  macros: MacroConstraint[] = [],
 ): string {
   const anchor = anchorOf(incident, nodes);
   const bearingNodes = nodes.filter((n) => n.azimuthTrueDeg != null);
@@ -119,6 +141,7 @@ export function buildGeoJson(
 
   const features: Feature[] = [];
   for (const n of nodes) features.push(nodeFeature(n));
+  for (const m of macros) features.push(macroFeature(m));
   if (anchor) {
     for (const n of bearingNodes) {
       const end = rayEnd(anchor, { lat: n.lat, lon: n.lon }, n.azimuthTrueDeg as number, meters);
@@ -144,6 +167,7 @@ export function buildGeoJson(
       region95AreaM2: sol.region95AreaM2,
       nModes: sol.nModes,
       nNodesUsed: sol.nNodesUsed,
+      nMacroConstraints: macros.length,
       knownErrorNote: KNOWN_ERROR_NOTE,
     },
     features,
@@ -156,7 +180,7 @@ export function exportGeoJson(store: Store): void {
   const sol = ensureSolution(store);
   const incident = store.getIncident();
   if (!sol) return; // caller gates on an empty/under-constrained store
-  const json = buildGeoJson(sol, store.activeNodes(), incident);
+  const json = buildGeoJson(sol, store.activeNodes(), incident, store.activeMacros());
   downloadBlob(json, exportFilename(incident.name, "geojson"), "application/geo+json");
   recordExport(store, "geojson", sol);
 }

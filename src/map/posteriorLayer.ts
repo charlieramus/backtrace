@@ -78,7 +78,8 @@ export function initPosteriorLayer(map: L.Map, store: Store): PosteriorLayer {
       inc.anchorLat != null && inc.anchorLon != null
         ? { lat: inc.anchorLat, lon: inc.anchorLon }
         : undefined;
-    grid = computePosterior(store.getAll(), anchor ? { anchor } : {});
+    const constraints = store.activeMacros();
+    grid = computePosterior(store.getAll(), { ...(anchor ? { anchor } : {}), constraints });
     if (!grid) {
       alpha = cellLat = cellLon = null;
       edges = [];

@@ -18,6 +18,7 @@ import type { Node, SpreadType } from "../domain/node";
 import { effectiveSigma } from "../domain/node";
 import { getIndicator, indicatorHex } from "../domain/indicators";
 import type { Investigator } from "../domain/investigator";
+import type { MacroConstraint } from "../domain/macro";
 import { enuFromLatLon, type LatLon, type Enu } from "../geo/enu";
 import type { OriginSolution } from "../geo/solution";
 import { computeManifestHash } from "../domain/recordHash";
@@ -274,6 +275,7 @@ export async function buildPdf(
   incident: IncidentHeader,
   investigator: Investigator,
   manifestHash: string | null,
+  macros: MacroConstraint[] = [],
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.setTitle(`Backtrace origin report — ${incident.name}`);
@@ -383,6 +385,29 @@ export async function buildPdf(
   c2.gap(16);
   c2.rule();
 
+  // Macro evidence (V10) — the priors that shaped the region, with their source.
+  if (macros.length > 0) {
+    c2.line("MACRO EVIDENCE (PRIORS)", 12, { bold: true, gap: 12 });
+    for (const m of macros) {
+      const params: string[] = [];
+      if (m.bearingDeg != null) params.push(`bearing ${Math.round(m.bearingDeg)}°`);
+      if (m.spreadDeg != null) params.push(`±${Math.round(m.spreadDeg)}°`);
+      if (m.radiusM != null) params.push(`radius ${Math.round(m.radiusM)} m`);
+      params.push(`weight ${m.weight}`);
+      c2.wrapped(`• ${m.kind} — source ${m.source}; ${params.join(", ")}.${m.notes ? ` ${m.notes}` : ""}`, 9);
+      c2.gap(2);
+    }
+    c2.gap(4);
+    c2.wrapped(
+      "These macro constraints are consumed as a Bayesian PRIOR over the origin location (a region, never a ray). " +
+        "The candidate region above is the fused result: log_post = log_prior + sum(log_likelihood). With no macro " +
+        "constraints the prior is flat and the region equals the micro-only (indicator) result exactly.",
+      9,
+    );
+    c2.gap(10);
+    c2.rule();
+  }
+
   // Methodology appendix
   c2.line("METHODOLOGY APPENDIX", 12, { bold: true, gap: 16 });
   c2.wrapped(
@@ -439,7 +464,7 @@ export async function exportPdf(store: Store): Promise<void> {
   } catch {
     /* Web Crypto unavailable — the report notes "(unsealed)" */
   }
-  const bytes = await buildPdf(sol, nodes, incident, store.getInvestigator(), manifestHash);
+  const bytes = await buildPdf(sol, nodes, incident, store.getInvestigator(), manifestHash, store.activeMacros());
   downloadBlob(bytes, exportFilename(incident.name, "pdf"), "application/pdf");
   recordExport(store, "pdf", sol);
 }

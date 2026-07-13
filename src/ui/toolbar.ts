@@ -14,7 +14,7 @@ import { exportKml } from "../io/exportKml";
 import { exportGeoPackage } from "../io/exportGeoPackage";
 import { exportPdf } from "../io/exportPdf";
 import { buildSolution } from "../geo/solution";
-import { loadMarshallDemo, loadConflictingDemo, type DemoResult } from "../demo/presets";
+import { loadMarshallDemo, loadConflictingDemo, loadMarshallMacroDemo, type DemoResult } from "../demo/presets";
 import { showToast } from "./toast";
 import { openModal } from "./modal";
 
@@ -214,6 +214,10 @@ export function initToolbar(map: L.Map, store: Store): Toolbar {
       <b>Conflicting indicators</b>
       <small>Two candidate origins — the data supports both</small>
     </button>
+    <button class="bt-menuitem" data-act="macro">
+      <b>Macro-informed (GOA→SOA)</b>
+      <small>Same nodes + a witness cone & V apex — the prior tightens the region</small>
+    </button>
     <div class="bt-menu-div"></div>
     <button class="bt-menuitem danger" data-act="clear">
       <b>Clear investigation</b>
@@ -263,6 +267,9 @@ export function initToolbar(map: L.Map, store: Store): Toolbar {
     } else if (act === "conflict") {
       frameTo(loadConflictingDemo(store));
       showToast("Loaded conflicting indicators — the field is bimodal (two origins).", "ok");
+    } else if (act === "macro") {
+      frameTo(loadMarshallMacroDemo(store));
+      showToast("Loaded the macro-informed demo — the prior tightens the candidate region.", "ok");
     } else if (act === "clear") {
       await doClear();
     }

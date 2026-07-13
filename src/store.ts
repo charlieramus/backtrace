@@ -14,6 +14,8 @@
 
 import type { Node } from "./domain/node";
 import { chainKeyOf, deriveActiveNodes } from "./domain/node";
+import type { MacroConstraint, MacroKind, MacroSource, MacroGeometry } from "./domain/macro";
+import { macroChainKeyOf, deriveActiveMacros, computeMacroHash } from "./domain/macro";
 import { computeRecordHash } from "./domain/recordHash";
 import { makeAuditEntry, type AuditEntry, type AuditInput } from "./domain/audit";
 import { makeLocalInvestigator, type Investigator } from "./domain/investigator";
@@ -43,6 +45,8 @@ export interface IncidentHeader {
 export interface InvestigationState {
   incident: IncidentHeader;
   nodes: Node[];
+  /** Append-only macro-constraint history (V10) — the same discipline as `nodes`. */
+  macroConstraints: MacroConstraint[];
   selectedNodeId: string | null;
   armedIndicatorCode: IndicatorCode;
   /** Append-only custody audit trail (V6 S4). */
@@ -62,6 +66,19 @@ export type NodeInput = {
   lon: number;
   indicatorCode: IndicatorCode;
 } & Partial<Omit<Node, "id" | "lat" | "lon" | "indicatorCode">>;
+
+/** Fields a caller supplies to place a macro constraint; the store fills id + incidentId +
+ *  chainId + defaults. Geometry + kind + source are the core; params are kind-specific. */
+export type MacroInput = {
+  kind: MacroKind;
+  geometry: MacroGeometry;
+  source: MacroSource;
+} & Partial<Pick<MacroConstraint, "weight" | "notes" | "bearingDeg" | "spreadDeg" | "radiusM">>;
+
+/** An editable macro correction: everything except the immutable identity/chain columns. */
+export type MacroChanges = Partial<
+  Omit<MacroConstraint, "id" | "incidentId" | "chainId" | "supersedesId" | "voided" | "voidReason" | "recordHash">
+>;
 
 export type StoreListener = (state: InvestigationState) => void;
 
@@ -83,6 +100,16 @@ export interface Store {
   supersede(nodeId: string, changes: NodeChanges): Node;
   /** Void a node (append a voided superseding row). Requires a non-empty reason. */
   void(nodeId: string, reason: string): Node;
+  /** The active macro constraints — latest non-voided row per chain (V10). */
+  activeMacros(): MacroConstraint[];
+  /** The full ordered correction chain for a macro constraint's chain. */
+  historyOfMacro(chainId: string): MacroConstraint[];
+  /** Place a macro constraint (append-only, hashed, audited). */
+  addMacro(input: MacroInput): MacroConstraint;
+  /** Correct a macro constraint by appending a superseding row (never mutates). */
+  supersedeMacro(macroId: string, changes: MacroChanges): MacroConstraint;
+  /** Void a macro constraint (append a voided row). Requires a non-empty reason. */
+  voidMacro(macroId: string, reason: string): MacroConstraint;
   /** Live, un-sealed edit for smooth typing/dragging — updates the working row in a
    *  draft overlay WITHOUT appending history. Seal it with commitEdit(). */
   previewEdit(nodeId: string, changes: NodeChanges): void;
@@ -111,6 +138,7 @@ export interface Store {
   load(data: {
     incident: IncidentHeader;
     nodes: Node[];
+    macroConstraints?: MacroConstraint[];
     auditLog?: AuditEntry[];
     investigator?: Investigator;
     solution?: OriginSolution | null;
@@ -150,6 +178,7 @@ export function createStore(): Store {
       datum: "WGS84",
     },
     nodes: [],
+    macroConstraints: [],
     selectedNodeId: null,
     armedIndicatorCode: "ANGLE_OF_CHAR",
     auditLog: [],
@@ -177,6 +206,30 @@ export function createStore(): Store {
       .catch(() => {
         /* crypto.subtle unavailable — export/verify still recompute on demand */
       });
+  }
+  // Same best-effort seal for a macro-constraint row (V10).
+  function sealMacro(m: MacroConstraint): void {
+    computeMacroHash(m)
+      .then((h) => {
+        m.recordHash = h;
+      })
+      .catch(() => {
+        /* crypto.subtle unavailable — recomputed on demand */
+      });
+  }
+  function makeMacroId(): string {
+    return "m_" + makeId();
+  }
+  /** The latest row for a macro chain (its tip), or undefined. */
+  function macroTipForChain(chainId: string): MacroConstraint | undefined {
+    let tip: MacroConstraint | undefined;
+    for (const m of state.macroConstraints) if (macroChainKeyOf(m) === chainId) tip = m;
+    return tip;
+  }
+  /** Resolve any macro id to its chain's tip. */
+  function macroTipForId(id: string): MacroConstraint | undefined {
+    const m = state.macroConstraints.find((x) => x.id === id);
+    return m ? macroTipForChain(macroChainKeyOf(m)) : undefined;
   }
 
   // Append one custody audit entry (no emit — the surrounding mutation emits once).
@@ -293,6 +346,79 @@ export function createStore(): Store {
       return row;
     },
 
+    activeMacros: () => deriveActiveMacros(state.macroConstraints),
+
+    historyOfMacro(chainId) {
+      return state.macroConstraints.filter((m) => macroChainKeyOf(m) === chainId);
+    },
+
+    addMacro(input) {
+      const id = makeMacroId();
+      const macro: MacroConstraint = {
+        id,
+        incidentId: state.incident.id,
+        chainId: id,
+        kind: input.kind,
+        geometry: input.geometry,
+        weight: input.weight ?? 1,
+        source: input.source,
+        notes: input.notes ?? "",
+        bearingDeg: input.bearingDeg ?? null,
+        spreadDeg: input.spreadDeg ?? null,
+        radiusM: input.radiusM ?? null,
+        voided: false,
+        createdAtUtc: new Date().toISOString(),
+      };
+      state.macroConstraints.push(macro);
+      sealMacro(macro);
+      pushAudit("CREATE_MACRO", "MACRO", macro.id, undefined, macro);
+      emit();
+      return macro;
+    },
+
+    supersedeMacro(macroId, changes) {
+      const tip = macroTipForId(macroId);
+      if (!tip) throw new Error(`supersedeMacro: no constraint for id ${macroId}`);
+      const row: MacroConstraint = {
+        ...tip,
+        ...changes,
+        id: makeMacroId(),
+        incidentId: tip.incidentId,
+        chainId: macroChainKeyOf(tip),
+        supersedesId: tip.id,
+        voided: tip.voided ?? false,
+        createdAtUtc: new Date().toISOString(),
+        recordHash: null,
+      };
+      state.macroConstraints.push(row);
+      sealMacro(row);
+      pushAudit("SUPERSEDE_MACRO", "MACRO", row.id, tip, row);
+      emit();
+      return row;
+    },
+
+    voidMacro(macroId, reason) {
+      const clean = reason.trim();
+      if (!clean) throw new Error("voidMacro requires a non-empty reason");
+      const tip = macroTipForId(macroId);
+      if (!tip) throw new Error(`voidMacro: no constraint for id ${macroId}`);
+      const row: MacroConstraint = {
+        ...tip,
+        id: makeMacroId(),
+        chainId: macroChainKeyOf(tip),
+        supersedesId: tip.id,
+        voided: true,
+        voidReason: clean,
+        createdAtUtc: new Date().toISOString(),
+        recordHash: null,
+      };
+      state.macroConstraints.push(row);
+      sealMacro(row);
+      pushAudit("VOID_MACRO", "MACRO", row.id, tip, row);
+      emit();
+      return row;
+    },
+
     previewEdit(nodeId, changes) {
       const tip = tipForId(nodeId);
       if (!tip) return;
@@ -398,6 +524,7 @@ export function createStore(): Store {
     load(data) {
       state.incident = { ...data.incident };
       state.nodes = data.nodes.map((n) => ({ ...n }));
+      state.macroConstraints = (data.macroConstraints ?? []).map((m) => ({ ...m }));
       state.auditLog = (data.auditLog ?? []).map((e) => ({ ...e }));
       state.investigator = data.investigator ? { ...data.investigator } : makeLocalInvestigator();
       state.solution = data.solution ?? null;
@@ -416,6 +543,7 @@ export function createStore(): Store {
         datum: "WGS84",
       };
       state.nodes = [];
+      state.macroConstraints = [];
       state.auditLog = [];
       state.investigator = makeLocalInvestigator();
       state.solution = null;

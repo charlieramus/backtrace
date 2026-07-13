@@ -225,7 +225,8 @@ export function buildSolution(store: Store): OriginSolution | null {
       : undefined;
 
   const eps = 0.15;
-  const g = computePosterior(nodes, anchor ? { anchor, eps } : { eps });
+  const constraints = store.activeMacros();
+  const g = computePosterior(nodes, { ...(anchor ? { anchor } : {}), eps, constraints });
   if (!g) return null;
 
   const regions = hdrRegions(g);
@@ -267,7 +268,11 @@ export function buildSolution(store: Store): OriginSolution | null {
     ny: g.ny,
     cellSizeM: g.cellSizeM,
     extent: g.extent,
-    prior: "uniform spatial prior; per-indicator von Mises (Parker & Babrauskas 2024 σ)",
+    prior:
+      constraints.length > 0
+        ? `${constraints.length} macro constraint(s) as a Bayesian log-prior (V_APEX/WITNESS_CONE/FIRST_REPORT_LOC/BURN_PERIMETER/EXCLUSION_ZONE); per-indicator von Mises (Parker & Babrauskas 2024 σ). log_post = log_prior + Σ log_likelihood.`
+        : "uniform spatial prior; per-indicator von Mises (Parker & Babrauskas 2024 σ)",
+    macroConstraintCount: constraints.length,
   };
 
   const sol: OriginSolution = {

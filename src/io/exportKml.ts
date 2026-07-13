@@ -10,6 +10,7 @@ import type { Store } from "../store";
 import type { IncidentHeader } from "../store";
 import type { Node } from "../domain/node";
 import { effectiveSigma } from "../domain/node";
+import type { MacroConstraint } from "../domain/macro";
 import { getIndicator, indicatorHex } from "../domain/indicators";
 import type { LatLon } from "../geo/enu";
 import type { OriginSolution, MultiPolygon } from "../geo/solution";
@@ -137,8 +138,38 @@ function modePlacemark(p: LatLon, i: number, sol: OriginSolution): string {
   );
 }
 
+/** A KML placemark for a macro constraint — a prior over the origin, not a ray. */
+function macroPlacemark(m: MacroConstraint): string {
+  let geom = "";
+  if (m.geometry.type === "Point") {
+    geom = `<Point><coordinates>${m.geometry.coordinates[0]},${m.geometry.coordinates[1]},0</coordinates></Point>`;
+  } else if (m.geometry.type === "LineString") {
+    geom = `<LineString><tessellate>1</tessellate><coordinates>${coordString(m.geometry.coordinates)}</coordinates></LineString>`;
+  } else {
+    geom = `<Polygon><outerBoundaryIs><LinearRing><coordinates>${coordString(m.geometry.coordinates[0] ?? [])}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+  }
+  return (
+    `<Placemark>` +
+    `<name>${esc(`${m.kind} (${m.source})`)}</name>` +
+    `<description>${esc("Bayesian prior over the origin (not a ray). " + (m.notes || ""))}</description>` +
+    `<ExtendedData>` +
+    `<Data name="macroKind"><value>${esc(m.kind)}</value></Data>` +
+    `<Data name="source"><value>${esc(m.source)}</value></Data>` +
+    `<Data name="weight"><value>${m.weight}</value></Data>` +
+    `<Data name="bearingDeg"><value>${m.bearingDeg ?? ""}</value></Data>` +
+    `<Data name="spreadDeg"><value>${m.spreadDeg ?? ""}</value></Data>` +
+    `<Data name="radiusM"><value>${m.radiusM ?? ""}</value></Data>` +
+    `</ExtendedData>${geom}</Placemark>`
+  );
+}
+
 /** Build the KML string from a solution + the active nodes (pure, DOM-free). */
-export function buildKml(sol: OriginSolution, nodes: Node[], incident: IncidentHeader): string {
+export function buildKml(
+  sol: OriginSolution,
+  nodes: Node[],
+  incident: IncidentHeader,
+  macros: MacroConstraint[] = [],
+): string {
   const anchor: LatLon | null =
     incident.anchorLat != null && incident.anchorLon != null
       ? { lat: incident.anchorLat, lon: incident.anchorLon }
@@ -176,6 +207,7 @@ export function buildKml(sol: OriginSolution, nodes: Node[], incident: IncidentH
     `<name>${esc(`Backtrace — ${incident.name}`)}</name>` +
     `<description>${esc(desc)}</description>` +
     `<atom:generator xmlns:atom="http://www.w3.org/2005/Atom">Backtrace ${esc(APP_VERSION)}</atom:generator>` +
+    `<Folder><name>Macro constraints (priors)</name>${macros.map(macroPlacemark).join("")}</Folder>` +
     `<Folder><name>Indicator nodes</name>${nodeMarks}</Folder>` +
     `<Folder><name>Bearing rays</name>${rayMarks}</Folder>` +
     `<Folder><name>Credible regions</name>${regionMarks}</Folder>` +
@@ -189,7 +221,7 @@ export function exportKml(store: Store): void {
   const sol = ensureSolution(store);
   const incident = store.getIncident();
   if (!sol) return;
-  const kml = buildKml(sol, store.activeNodes(), incident);
+  const kml = buildKml(sol, store.activeNodes(), incident, store.activeMacros());
   downloadBlob(kml, exportFilename(incident.name, "kml"), "application/vnd.google-earth.kml+xml");
   recordExport(store, "kml", sol);
 }

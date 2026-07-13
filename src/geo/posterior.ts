@@ -14,10 +14,13 @@ import type { LatLon } from "./enu";
 import { enuFromLatLon, enuToLatLon } from "./enu";
 import type { Node } from "../domain/node";
 import { effectiveSigma } from "../domain/node";
+import type { MacroConstraint } from "../domain/macro";
+import { buildLogPrior } from "./prior";
 
 const DEG = Math.PI / 180;
 const TWO_PI = 2 * Math.PI;
 const LOG_2PI = Math.log(TWO_PI);
+const EMPTY = new Float64Array(0); // placeholder `values` for the grid-metadata passed to the prior
 
 /** Wrap an angle (radians) to (−π, π]. */
 export function wrapPi(a: number): number {
@@ -88,6 +91,12 @@ export interface PosteriorOpts {
   marginFrac?: number;
   /** Outlier-mixture weight ε. Default 0.15. */
   eps?: number;
+  /**
+   * Active macro constraints (V10) fused in as a Bayesian log-prior:
+   * `log_post = log_prior + Σ log_likelihood`. Omitted or empty ⇒ a flat (constant) prior ⇒
+   * the output is byte-for-byte the pre-V10 v0 result (a hard invariant).
+   */
+  constraints?: MacroConstraint[];
 }
 
 interface UsableNode {
@@ -172,21 +181,27 @@ export function computePosterior(nodes: Node[], opts: PosteriorOpts = {}): Poste
   const logEps = Math.log(eps / TWO_PI);
   const log1mEps = Math.log(1 - eps);
 
+  // The macro log-prior over this exact grid (CRESEARCH.md §4.1). With no constraints it's a
+  // constant zero field, so adding it leaves the posterior byte-for-byte the v0 result.
+  const gridMeta: PosteriorGrid = { values: EMPTY, nx, ny, anchor, cellSizeM, extent, nodesUsed: usable.length };
+  const logPrior = buildLogPrior(opts.constraints ?? [], gridMeta);
+
   const logGrid = new Float64Array(nx * ny);
   let logMax = -Infinity;
 
   for (let iy = 0; iy < ny; iy++) {
     const cn = extent.minN + (iy + 0.5) * cellSizeM;
     for (let ix = 0; ix < nx; ix++) {
+      const idx = iy * nx + ix;
       const ce = extent.minE + (ix + 0.5) * cellSizeM;
-      let logAcc = 0;
+      let logAcc = logPrior[idx]; // log_prior term
       for (const u of usable) {
         const beta = Math.atan2(ce - u.e, cn - u.n); // bearing node -> cell
         const delta = wrapPi(u.theta - beta);
         const logVm = u.kappa * Math.cos(delta) + u.logNorm; // von Mises log-density
         logAcc += logSumExp(log1mEps + logVm, logEps);
       }
-      logGrid[iy * nx + ix] = logAcc;
+      logGrid[idx] = logAcc;
       if (logAcc > logMax) logMax = logAcc;
     }
   }

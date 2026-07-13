@@ -3,17 +3,21 @@
 // per-node chain of custody. Pure + DOM-free; the store owns the list and appends to it,
 // and it rides along in the save file (Stage 5) so the trail survives a round-trip.
 
-/** The custody-relevant actions worth recording. EXPORT is appended by V7's exporters. */
+/** The custody-relevant actions worth recording. EXPORT is appended by V7's exporters; the
+ *  MACRO actions (V10) mirror the node ones for macro-constraint mutations. */
 export type AuditAction =
   | "CREATE_NODE"
   | "SUPERSEDE_NODE"
   | "VOID_NODE"
+  | "CREATE_MACRO"
+  | "SUPERSEDE_MACRO"
+  | "VOID_MACRO"
   | "EDIT_INCIDENT"
   | "IMPORT"
   | "EXPORT";
 
 /** What an entry is about. */
-export type AuditEntity = "NODE" | "INCIDENT" | "INVESTIGATION";
+export type AuditEntity = "NODE" | "MACRO" | "INCIDENT" | "INVESTIGATION";
 
 /** One immutable audit row. `beforeJson`/`afterJson` capture the change where it applies. */
 export interface AuditEntry {
@@ -67,9 +71,11 @@ export function makeAuditEntry(input: AuditInput): AuditEntry {
 }
 
 const ACTIONS: AuditAction[] = [
-  "CREATE_NODE", "SUPERSEDE_NODE", "VOID_NODE", "EDIT_INCIDENT", "IMPORT", "EXPORT",
+  "CREATE_NODE", "SUPERSEDE_NODE", "VOID_NODE",
+  "CREATE_MACRO", "SUPERSEDE_MACRO", "VOID_MACRO",
+  "EDIT_INCIDENT", "IMPORT", "EXPORT",
 ];
-const ENTITIES: AuditEntity[] = ["NODE", "INCIDENT", "INVESTIGATION"];
+const ENTITIES: AuditEntity[] = ["NODE", "MACRO", "INCIDENT", "INVESTIGATION"];
 
 /** Validate one raw audit row from a save file; returns null if it's malformed. */
 export function validateAuditEntry(raw: unknown): AuditEntry | null {

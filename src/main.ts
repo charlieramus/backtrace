@@ -27,6 +27,7 @@ import { initSelectedNode } from "./ui/SelectedNode";
 import { initReadout } from "./ui/Readout";
 import { initToolbar } from "./ui/toolbar";
 import { initCapture } from "./ui/capture";
+import { initMacroTools } from "./map/macroTools";
 import { store } from "./store";
 
 // Restore a persisted theme choice before the map mounts so the first basemap
@@ -91,6 +92,9 @@ initToolbar(map, store);
 
 // Field capture (V9): live GPS position + honest bearing, from where you stand in the burn.
 initCapture(map, store);
+
+// Macro priors (V10): GOA→SOA drawing tools — macro evidence as a Bayesian prior.
+initMacroTools(map, store);
 
 // Offline-first PWA: register the service worker (production build only, to keep the
 // dev server's HMR clean). After one online visit the app shell runs with no network.

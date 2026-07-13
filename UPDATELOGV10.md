@@ -63,7 +63,38 @@ append-only/audit/hash discipline holds.
 
 ## Stage 1 Report
 
-_Pending._
+The macro-constraint type + its append-only store are in.
+
+- **`src/domain/macro.ts` (new)** — `MacroConstraint { id, incidentId, kind, geometry (WGS84
+  GeoJSON Point/LineString/Polygon), weight (default 1.0), source, notes, + kind-specific
+  bearingDeg/spreadDeg/radiusM, + chainId/supersedesId/voided/voidReason, createdAtUtc,
+  recordHash }`. `kind ∈ { V_APEX, BURN_PERIMETER, WITNESS_CONE, FIRST_REPORT_LOC,
+  EXCLUSION_ZONE }`; `source ∈ { INVESTIGATOR, IR_FLIGHT, WITNESS, DISPATCH }`. DOM-free. Plus
+  `deriveActiveMacros` (latest non-voided row per chain, shared by store + prior/export),
+  `canonicalizeMacro` + `computeMacroHash` (SHA-256 seal folding the geometry in so a moved
+  vertex changes the seal), and `validateMacroConstraint` for import.
+- **`src/store.ts`** — holds `macroConstraints` alongside `nodes` with the **same V6 append-only
+  discipline**: `addMacro` / `supersedeMacro` / `voidMacro` (a correction appends a superseding
+  row carrying `supersedesId` + the shared `chainId`; a void appends a `voided` row with a
+  reason; rows are never mutated), `activeMacros()` (latest-only), `historyOfMacro()`, each
+  **sealed with a recordHash on write** and **audited** (a `CREATE_MACRO`/`SUPERSEDE_MACRO`/
+  `VOID_MACRO` entry with the new `MACRO` audit entity). `load`/`clear` handle them.
+- **`src/domain/audit.ts`** — added the `MACRO` entity + the three macro actions to the type
+  unions and the runtime validators.
+- **`src/io/savefile.ts`** — the v2 save file now carries the full macro history
+  (`macroConstraints`); `buildSaveFile` emits it, `parseSaveFile` validates each row
+  (`validateMacroConstraint`), `sealSaveFile` recomputes each macro's hash, and `applySaveFile`
+  restores them on replace.
+- **`src/store.test.ts`** — 4 new tests: add/supersede/void behave like nodes (history retained,
+  `activeMacros()` latest-only, voided chain drops out); `voidMacro` demands a reason; a
+  `MACRO` audit entry is appended per mutation (CREATE/SUPERSEDE/VOID); and a witness cone +
+  an exclusion polygon round-trip through save/load with geometry + provenance intact.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green incl. the macro append-only test (**114
+tests**, +4). Constraint kinds supported: V_APEX, BURN_PERIMETER, WITNESS_CONE, FIRST_REPORT_LOC,
+EXCLUSION_ZONE. A macro constraint round-trips through save/load with its GeoJSON geometry +
+source/weight/params intact, and the append-only / audit / per-row hash discipline holds (verified
+by the new tests).
 
 ---
 
@@ -94,7 +125,32 @@ invariance.
 
 ## Stage 2 Report
 
-_Pending._
+Each macro constraint now induces a log-prior over the posterior's own ENU grid.
+
+- **`src/geo/prior.ts` (new)** — `buildLogPrior(constraints, grid, opts?)` → a `Float64Array`
+  aligned to the posterior grid (row-major `iy*nx+ix`, reusing `PosteriorGrid` +
+  `cellCenterEnu`; **no second grid**). Each constraint's WGS84 geometry is converted to ENU
+  **once** at the grid anchor (`enuFromLatLon`), compiled to a typed shape, then evaluated per
+  cell and summed × weight in log space:
+  - **FIRST_REPORT_LOC** — a 2-D Gaussian bump `−½(d/radius)²`, peaking at the point.
+  - **WITNESS_CONE** — 0 inside the `bearing ± spread` sector (observer→cell azimuth), a soft
+    `−½((off−spread)/8)²` falloff outside.
+  - **V_APEX** — a ridge from the apex down the axis: Gaussian across the axis + a penalty for
+    being behind the apex (interior favored).
+  - **BURN_PERIMETER** — 0 inside the polygon, `−40` (≈ zeroed after softmax) outside.
+  - **EXCLUSION_ZONE** — `−40` inside, 0 outside.
+  With **no constraints it returns all zeros** — a constant field, which is exactly the
+  flat-prior invariant Stage 3 depends on. Pure + vectorized (one compile pass per constraint,
+  one grid sweep), consistent with `posterior.ts`.
+- **`src/geo/prior.test.ts` (new)** — 7 tests on a synthetic 2 km ENU grid: the empty case is
+  all-zero (constant); an exclusion zone is strongly negative inside / ~0 outside; a burn
+  perimeter is 0 inside / strongly negative outside; a witness cone is 0 in-sector and lower
+  out-of-sector; a first-report Gaussian peaks (~0) at the point and falls off; a V apex favors
+  the interior over behind it; and a constraint's contribution scales linearly with its weight.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green incl. the prior tests. Each kind produces the
+expected prior shape and the empty case is a flat constant — the invariance the fusion in Stage 3
+turns into a byte-for-byte v0 match.
 
 ---
 
@@ -121,7 +177,33 @@ the active prior. Report the invariance result + the exclusion-zone effect (area
 
 ## Stage 3 Report
 
-_Pending._
+The Bayesian fusion is in — `log_post = log_prior + Σ log_likelihood`.
+
+- **`src/geo/posterior.ts`** — `computePosterior` now takes an optional `constraints` in
+  `PosteriorOpts`. After it fixes the grid geometry it builds `buildLogPrior(constraints, grid)`
+  over that exact grid and seeds each cell's accumulator with the log-prior term before adding
+  the micro von Mises log-likelihoods, then softmax-normalizes as before. **Hard invariant:** an
+  empty/omitted `constraints` yields an all-zero prior, so the seed is `+0.0` and the result is
+  **byte-for-byte** the v0 posterior — asserted, not hoped (test (a) below compares the full
+  `Float64Array`). (`prior.ts` ↔ `posterior.ts` is a runtime-only import cycle — both functions
+  are call-time, never module-eval — which builds and runs cleanly.)
+- **`src/ui/Readout.ts`** — passes `store.activeMacros()` into the posterior and, when a prior is
+  active, shows an honest note: "Origin area informed by N macro constraints (prior × likelihood)"
+  so the user sees the prior — not just the rays — shaped the region.
+- **`src/map/posteriorLayer.ts` + `src/geo/solution.ts`** — both now consume the fused posterior
+  (pass the active macros), so the map field and the exported origin solution reflect the prior;
+  the solution's `paramsJson` records the constraint count + the `log_post = log_prior + Σ
+  log_likelihood` method string for the export methodology.
+- **`src/geo/posterior.test.ts`** — 3 new tests: **(a)** no-macro invariance — the bimodal
+  posterior's full value array is identical with `constraints` unset, `[]`, and `undefined`;
+  **(b)** an exclusion zone over one lobe of the bimodal case takes `modeCount` **2 → 1** and
+  collapses that lobe's mass to <1e-6; **(c)** a tight witness cone shrinks a broad single-mode
+  95% area (the prior honestly tightens the region).
+
+**Verify:** `tsc --noEmit` clean; `npm test` green incl. the invariance + fusion tests. The
+no-macro Marshall/bimodal posterior is **byte-for-byte unchanged**; an exclusion zone demonstrably
+removes a mode (2 → 1) and moves mass; a witness cone tightens the 95% area; and the readout notes
+the active prior. All prior existing posterior/solution/hdr/savefile tests still pass unchanged.
 
 ---
 
@@ -150,7 +232,33 @@ drawn constraint.
 
 ## Stage 4 Report
 
-_Pending._
+The doctrine now has a shape: draw macro evidence, then refine with micro nodes.
+
+- **`src/map/macroTools.ts` (new) + `main.ts` wiring** — an injected "Macro" toolbar button opens
+  a frosted tools panel with the five constraint tools, a Phase-1 (GOA/macro) / Phase-2 (SOA/
+  micro) affordance (guidance, not a hard gate), and a live active-constraints list. Each tool
+  arms a map-click capture: **First-report** (one click, soft radius), **V apex** (apex → interior
+  click sets the axis), **Witness cone** (observer → a click along the first-smoke bearing, ±20°),
+  **Burn perimeter** / **Exclusion zone** (click vertices, double-click to close; double-click zoom
+  is suppressed while drawing). Every completion writes an **append-only** `MacroConstraint` (V6)
+  via `store.addMacro`, which flows through `prior.ts` → the fused posterior **live**.
+- **Colour-blind-safe rendering** — active constraints draw in a dedicated map pane (z 410) with a
+  distinct **shape + hue** per kind (blue V-axis polyline + apex dot; teal cone rays + observer;
+  amber first-report dot + soft-radius ring; violet solid burn polygon; red dashed exclusion
+  polygon) — shape carries the meaning even without colour (CRESEARCH.md §4.5).
+- **Edit/void through the V6 flow** — each list row has a void action that runs the same
+  stated-reason prompt as nodes and calls `store.voidMacro` (supersedes, history retained).
+- The constraints feed `prior.ts` → the posterior and the readout's prior note; the list mirrors
+  the node list with each macro's source.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green (**124 tests**); `vite build` succeeds (~2.9 s).
+The posterior effect of a drawn constraint is proven by the Stage 3 fusion tests — a witness cone
+**shrinks** the 95% area and an exclusion zone **removes a mode** (2 → 1) — which is exactly what
+the drawing tools write. The constraints render colour-blind-safe (shape + colour) and void
+supersedes (store-tested). The **live before/after map walkthrough** (drawing on the real map and
+watching the region move) is a browser interaction I can't drive in this headless env; I did not
+capture an on-map screenshot and don't claim one — the underlying write→prior→posterior path is
+unit-covered end to end.
 
 ---
 
@@ -181,7 +289,41 @@ comparison, the export contents, and confirm NOW.md updated.
 
 ## Stage 5 Report
 
-_Pending._
+The thesis is seeded, carried through the exports, and proven end to end.
+
+- **`src/demo/presets.ts`** — `loadMarshallMacroDemo()` seeds the macro-informed preset: the same
+  Marshall micro nodes **plus** a witness first-smoke cone (observer ~1.4 km SSW, bearing 20°
+  ±18°) and a V apex (axis into the interior). `loadInto` now accepts `macroConstraints` and
+  passes them to `store.load`. Wired into the "Load demo" menu as "Macro-informed (GOA→SOA)".
+- **Exports carry the macro layer (V7):**
+  - **GeoJSON** — a `kind: "macro"` feature per constraint (geometry + source/weight/params +
+    the prior role note), and `nMacroConstraints` in the top-level properties.
+  - **KML** — a "Macro constraints (priors)" folder of placemarks (Point/LineString/Polygon +
+    ExtendedData).
+  - **GeoPackage** — a `macro_constraints` feature table (mixed `GEOMETRY`, WKB) with its
+    `gpkg_contents` + `gpkg_geometry_columns` rows, added only when constraints exist.
+  - **PDF** — a "MACRO EVIDENCE (PRIORS)" section listing each constraint's kind, source, params,
+    and notes, plus a statement that the region is the fused `log_post = log_prior + Σ
+    log_likelihood` result (and that no constraints = the micro-only result exactly). The
+    solution `paramsJson` records the constraint count + method string.
+- **`src/demo/macroDemo.coherence.test.ts` (new)** — 3 tests: the macro-informed 95% region is
+  **tighter** than the micro-only region yet still a broad area (>0.1 km², never a pinpoint); the
+  exports carry the macro layer (GeoJSON macro features == constraint count + `nMacroConstraints`;
+  KML macro folder; solution params disclose `log_prior`); and the **micro-only path carries no
+  macro layer** (`nMacroConstraints` 0) — the v0 result unchanged.
+- **`NOW.md` updated** — macro priors / GOA→SOA moved into "Working", the v2 roadmap item checked,
+  and the next major set to the slope-aware forward model + wind (`CRESEARCH.md` §4.2–4.4),
+  explicitly deferred.
+
+**Verify:** `tsc --noEmit` clean; `npm test` green — **127 tests** (23 files); `vite build`
+succeeds offline (~3.1 s) with WMM + V7 deps bundled. The macro demo shows an honestly informed
+(tighter, still-broad) region; the GeoJSON/KML/GeoPackage/PDF exports carry the macro layer + the
+fused-method note; the no-macro path is byte-for-byte v0 (Stage 3 invariance test + the micro-only
+export test). The **live end-to-end walkthrough** (loading the demo on the real map, drawing an
+extra constraint, and downloading a PDF/GeoPackage to eyeball) is a browser flow I can't drive in
+this headless env — the pure builders behind each export are unit-covered and the coherence test
+exercises the demo→solution→export path, but I did not click through the running app and don't
+claim a screenshot.
 
 ---
 

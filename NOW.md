@@ -74,6 +74,18 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
   derived true stored **separately**. Every capture writes to the append-only record immediately (V6),
   flows unchanged through the ENU core, posterior, HDR readout, and V7 exports (the PDF node table shows
   each node's method + accuracy), and works offline.
+- **Macro priors / GOA→SOA (V10).** Backtrace now works the way NWCG doctrine does — outside-in. A
+  **macro constraint** (a V apex, burn perimeter, witness first-smoke cone, dispatch first-report
+  location, or exclusion zone) is region-shaped evidence consumed as a Bayesian **prior** over the
+  origin, never a ray (`src/domain/macro.ts`, append-only/hashed/audited like nodes). Each induces a
+  log-prior over the posterior's own ENU grid (`src/geo/prior.ts`), fused as
+  **`log_post = log_prior + Σ log_likelihood`** (`src/geo/posterior.ts`) — with a hard invariant that
+  **no macro constraints = byte-for-byte the v0 result**. The GOA→SOA drawing tools
+  (`src/map/macroTools.ts`, colour-blind-safe shape+colour, a Phase-1/Phase-2 affordance) write
+  constraints live; the readout notes when a prior is active; and the macro layer + a fused-method
+  note ride through the GeoJSON/KML/GeoPackage/PDF exports. The **Macro-informed demo** shows the prior
+  honestly tightening the Marshall 95% region versus the micro-only trace (still a broad area, never a
+  pinpoint).
 
 ## Decided
 
@@ -106,20 +118,22 @@ account, no server. Built across `UPDATELOGV1.md`–`UPDATELOGV5.md`.
   detection, the WMM total-field anomaly detector, and the figure-8 calibration gate
   (`CRESEARCH.md` §2.2–2.3) — because a PWA cannot read magnetometer accuracy status, hard-iron
   bias, or raw field magnitude honestly. The web build discloses this and steers to two-point GNSS.
-- [ ] **v2 — Macro constraints.** Macro indicators as priors, GOA→SOA workflow
-  (`CRESEARCH.md` §4.1). Offline vector basemaps (PMTiles).
+- [x] **v2 — Macro constraints** (`UPDATELOGV10.md`). Shipped: macro indicators as Bayesian
+  priors (V apex, burn perimeter, witness cone, first-report, exclusion zone), the GOA→SOA
+  drawing workflow, the fused `log_post = log_prior + Σ log_likelihood` posterior (byte-for-byte
+  v0 with no constraints), and macro inclusion in the court-ready exports (`CRESEARCH.md` §4.1).
+  Offline vector basemaps (PMTiles) remain a later field-mode item.
 - [ ] **v3 — Forward model + real exports.** Slope-aware Rothermel back-projection
   (`CRESEARCH.md` §4.2–4.3); GeoPackage / KML / PDF report export (§5).
 
 ## Next action
 
-Start **V10 — Macro Priors (GOA→SOA)**: fold macro evidence in as Bayesian **priors** where
-`CRESEARCH.md` §4.1 says most of the actual information lives. A macro constraint (a V apex, burn
-perimeter, witness first-smoke cone, first-report location, exclusion zone) is a region-shaped
-prior over the origin, not a ray — `log_post = log_prior_from_macro + Σ log_likelihood_micro`, with
-a hard invariant that no macro constraints = byte-for-byte the v0 result. Add the append-only
-constraint model + store, the prior field, its fusion into the posterior, the GOA→SOA drawing
-tools, and inclusion in the exports. **Field mode (V9) is complete** — the app now captures a node
-from where you stand (live GPS + honest bearing) into the append-only record and carries it through
-the court-ready exports. (After V10: the slope-aware forward model + wind — `CRESEARCH.md`
-§4.2–4.4 — the next major, explicitly deferred, research-grade build.)
+Start **the forward model** — the next major, research-grade build (`CRESEARCH.md` §4.2–4.4):
+run the fire *backward* instead of bending a ray. On the same grid-Bayes substrate, derive a
+better `beta_i(x)` from a minimum-travel-time solve over a slope-aware Rothermel ROS raster (DEM +
+φ_s, elliptical back-projection) and reconstruct wind. **Macro priors (V10) are complete** — macro
+evidence now enters as a Bayesian prior fused with the micro likelihoods
+(`log_post = log_prior + Σ log_likelihood`), drawn via the GOA→SOA tools and carried through the
+court-ready exports, with the no-macro path byte-for-byte the v0 result. **Deferred and disclosed:**
+the full native magnetic-QC suite (V9's native-shell item) and offline vector basemaps (PMTiles)
+remain later field-mode work.

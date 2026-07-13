@@ -175,3 +175,70 @@ describe("audit log", () => {
     expect(after[after.length - 1].action).toBe("IMPORT"); // + an import marker
   });
 });
+
+describe("macro constraints — append-only, audited, sealed (V10)", () => {
+  const cone = {
+    kind: "WITNESS_CONE" as const,
+    source: "WITNESS" as const,
+    geometry: { type: "Point" as const, coordinates: [-105.28, 39.95] as [number, number] },
+    bearingDeg: 120,
+    spreadDeg: 20,
+  };
+
+  it("addMacro/supersedeMacro/voidMacro behave like nodes: history retained, activeMacros latest-only", () => {
+    const store = createStore();
+    const m = store.addMacro(cone);
+    expect(store.activeMacros()).toHaveLength(1);
+    expect(store.activeMacros()[0].bearingDeg).toBe(120);
+
+    const s = store.supersedeMacro(m.id, { bearingDeg: 135 });
+    expect(store.historyOfMacro(m.id)).toHaveLength(2); // original retained
+    expect(store.activeMacros()).toHaveLength(1); // latest-only
+    expect(store.activeMacros()[0].id).toBe(s.id);
+    expect(store.activeMacros()[0].bearingDeg).toBe(135);
+    // original row is untouched
+    expect(store.historyOfMacro(m.id)[0].bearingDeg).toBe(120);
+
+    store.voidMacro(s.id, "misattributed witness");
+    expect(store.activeMacros()).toHaveLength(0); // voided chain drops out
+    expect(store.historyOfMacro(m.id)).toHaveLength(3); // but history is kept
+  });
+
+  it("voidMacro requires a non-empty reason", () => {
+    const store = createStore();
+    const m = store.addMacro(cone);
+    expect(() => store.voidMacro(m.id, "  ")).toThrow(/reason/);
+  });
+
+  it("appends a MACRO audit entry per mutation", () => {
+    const store = createStore();
+    const m = store.addMacro(cone);
+    store.supersedeMacro(m.id, { weight: 2 });
+    store.voidMacro(m.id, "retracted");
+    const macroLog = store.getAuditLog().filter((e) => e.entity === "MACRO");
+    expect(macroLog.map((e) => e.action)).toEqual(["CREATE_MACRO", "SUPERSEDE_MACRO", "VOID_MACRO"]);
+  });
+
+  it("round-trips through save/load with geometry + provenance intact", () => {
+    const store = createStore();
+    store.add({ lat: 39.95, lon: -105.28, indicatorCode: "ANGLE_OF_CHAR", azimuthTrueDeg: 100, sigmaDeg: 90 });
+    const m = store.addMacro(cone);
+    store.addMacro({
+      kind: "EXCLUSION_ZONE",
+      source: "INVESTIGATOR",
+      geometry: { type: "Polygon", coordinates: [[[-105.3, 39.9], [-105.2, 39.9], [-105.2, 40.0], [-105.3, 40.0], [-105.3, 39.9]]] },
+    });
+
+    const parsed = parseSaveFile(saveFileToJson(buildSaveFile(store.getState())));
+    if (!parsed.ok) throw new Error(parsed.error);
+    const fresh = createStore();
+    applySaveFile(fresh, parsed.data, "replace");
+
+    const active = fresh.activeMacros();
+    expect(active).toHaveLength(2);
+    const witness = active.find((x) => x.kind === "WITNESS_CONE");
+    expect(witness?.bearingDeg).toBe(120);
+    expect(witness?.geometry).toEqual(m.geometry);
+    expect(active.find((x) => x.kind === "EXCLUSION_ZONE")?.geometry.type).toBe("Polygon");
+  });
+});

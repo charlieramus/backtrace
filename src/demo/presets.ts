@@ -13,6 +13,7 @@
 import type { IncidentHeader, Store } from "../store";
 import type { Node, SpreadType } from "../domain/node";
 import type { IndicatorCode } from "../domain/indicators";
+import type { MacroConstraint } from "../domain/macro";
 import { projectAlong, type LatLon } from "../geo/enu";
 
 interface NodeSpec {
@@ -55,7 +56,13 @@ function seedNodes(origin: LatLon, specs: NodeSpec[]): Node[] {
   });
 }
 
-function loadInto(store: Store, name: string, origin: LatLon, nodes: Node[]): DemoResult {
+function loadInto(
+  store: Store,
+  name: string,
+  origin: LatLon,
+  nodes: Node[],
+  macroConstraints: MacroConstraint[] = [],
+): DemoResult {
   const incident: IncidentHeader = {
     id: makeId("incident"),
     name,
@@ -63,7 +70,7 @@ function loadInto(store: Store, name: string, origin: LatLon, nodes: Node[]): De
     anchorLat: nodes[0]?.lat ?? origin.lat,
     anchorLon: nodes[0]?.lon ?? origin.lon,
   };
-  store.load({ incident, nodes });
+  store.load({ incident, nodes, macroConstraints });
   return { origin, points: nodes.map((n) => ({ lat: n.lat, lon: n.lon })) };
 }
 
@@ -84,6 +91,57 @@ const MARSHALL_SPECS: NodeSpec[] = [
 export function loadMarshallDemo(store: Store): DemoResult {
   const nodes = seedNodes(MARSHALL_ORIGIN, MARSHALL_SPECS);
   return loadInto(store, "Marshall Fire — desk trace", MARSHALL_ORIGIN, nodes);
+}
+
+/** Build a macro constraint around the Marshall origin (helper for the macro demo). */
+function makeMacro(
+  incidentId: string,
+  m: Pick<MacroConstraint, "kind" | "geometry" | "source"> & Partial<MacroConstraint>,
+): MacroConstraint {
+  const id = makeId("macro");
+  return {
+    id,
+    incidentId,
+    chainId: id,
+    weight: 1,
+    notes: "",
+    voided: false,
+    createdAtUtc: new Date().toISOString(),
+    ...m,
+  };
+}
+
+/**
+ * Seed the macro-informed Marshall demo (V10): the same micro nodes plus a V apex + a witness
+ * first-smoke cone. The prior HONESTLY tightens/moves the 95% region versus the micro-only
+ * version — still a broad, defensible area, just better informed (never a pinpoint).
+ */
+export function loadMarshallMacroDemo(store: Store): DemoResult {
+  const nodes = seedNodes(MARSHALL_ORIGIN, MARSHALL_SPECS);
+  const incidentId = makeId("incident");
+  // Witness ~1.4 km SSW of the origin, reporting first smoke to the NNE (toward the origin).
+  const observer = projectAlong(MARSHALL_ORIGIN, MARSHALL_ORIGIN, 200, 1400);
+  // V apex just S of the origin, axis pointing N into the burn interior.
+  const apex = projectAlong(MARSHALL_ORIGIN, MARSHALL_ORIGIN, 180, 400);
+  const interior = projectAlong(MARSHALL_ORIGIN, MARSHALL_ORIGIN, 0, 300);
+  const macros: MacroConstraint[] = [
+    makeMacro(incidentId, {
+      kind: "WITNESS_CONE",
+      source: "WITNESS",
+      geometry: { type: "Point", coordinates: [observer.lon, observer.lat] },
+      bearingDeg: 20,
+      spreadDeg: 18,
+    }),
+    makeMacro(incidentId, {
+      kind: "V_APEX",
+      source: "INVESTIGATOR",
+      geometry: { type: "LineString", coordinates: [[apex.lon, apex.lat], [interior.lon, interior.lat]] },
+      radiusM: 500,
+    }),
+  ];
+  // reuse the incidentId on the header so the constraints reference a real incident
+  const res = loadInto(store, "Marshall Fire — macro-informed (GOA→SOA)", MARSHALL_ORIGIN, nodes, macros);
+  return res;
 }
 
 /** Seed a deliberately conflicting case: two clusters → a bimodal posterior. */

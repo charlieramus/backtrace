@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { computePosterior, cellCenterLatLon, type PosteriorGrid } from "./posterior";
-import { enuFromLatLon, projectAlong, type LatLon } from "./enu";
+import { enuFromLatLon, enuToLatLon, projectAlong, type LatLon } from "./enu";
+import { hdrRegions, candidateAreaM2, modeCount } from "./hdr";
 import type { Node } from "../domain/node";
+import type { MacroConstraint, GeoPosition } from "../domain/macro";
 
 const O1: LatLon = { lat: 40.0, lon: -105.5 };
 
@@ -138,5 +140,96 @@ describe("von Mises grid posterior", () => {
     // a node without an azimuth doesn't count as a bearing
     const noAz: Node = { ...nodeToward(O1, 150, 1000, 12), azimuthTrueDeg: null };
     expect(computePosterior([one, noAz], { anchor: O1 })).toBeNull();
+  });
+});
+
+// --- V10 Stage 3: macro-prior fusion ----------------------------------------
+
+/** A [lon,lat] polygon ring: a square of half-size `halfM` around `center`. */
+function boxAround(center: LatLon, halfM: number): GeoPosition[] {
+  const enu = enuFromLatLon(center.lat, center.lon, center);
+  const corners = [
+    [enu.e - halfM, enu.n - halfM],
+    [enu.e + halfM, enu.n - halfM],
+    [enu.e + halfM, enu.n + halfM],
+    [enu.e - halfM, enu.n + halfM],
+  ].map(([e, n]) => {
+    const ll = enuToLatLon(e, n, center);
+    return [ll.lon, ll.lat] as GeoPosition;
+  });
+  return [...corners, corners[0]];
+}
+
+function macro(m: Partial<MacroConstraint> & Pick<MacroConstraint, "kind" | "geometry">): MacroConstraint {
+  return {
+    id: Math.random().toString(36).slice(2),
+    incidentId: "i",
+    weight: 1,
+    source: "INVESTIGATOR",
+    notes: "",
+    createdAtUtc: new Date().toISOString(),
+    ...m,
+  };
+}
+
+describe("macro-prior fusion (V10)", () => {
+  const bimodal = (): Node[] => {
+    const O2 = projectAlong(O1, O1, 90, 5000);
+    return [
+      nodeToward(O1, 20, 700, 18),
+      nodeToward(O1, 160, 700, 18),
+      nodeToward(O2, 20, 700, 18),
+      nodeToward(O2, 160, 700, 18),
+    ];
+  };
+
+  it("(a) no macro constraints => byte-for-byte the v0 posterior (hard invariant)", () => {
+    const nodes = bimodal();
+    const v0 = computePosterior(nodes, { anchor: O1, resolution: 140 })!;
+    const emptyArr = computePosterior(nodes, { anchor: O1, resolution: 140, constraints: [] })!;
+    const emptyUndef = computePosterior(nodes, { anchor: O1, resolution: 140, constraints: undefined })!;
+    expect(Array.from(emptyArr.values)).toEqual(Array.from(v0.values));
+    expect(Array.from(emptyUndef.values)).toEqual(Array.from(v0.values));
+  });
+
+  it("(b) an exclusion zone over one lobe removes that mode (nModes 2 -> 1)", () => {
+    const nodes = bimodal();
+    const O2 = projectAlong(O1, O1, 90, 5000);
+    const before = computePosterior(nodes, { anchor: O1, resolution: 160 })!;
+    expect(modeCount(before)).toBe(2);
+
+    const exclusion = macro({
+      kind: "EXCLUSION_ZONE",
+      geometry: { type: "Polygon", coordinates: [boxAround(O2, 1200)] },
+    });
+    const after = computePosterior(nodes, { anchor: O1, resolution: 160, constraints: [exclusion] })!;
+    expect(modeCount(after)).toBe(1);
+
+    // mass at the excluded lobe collapses
+    const c2 = nearestCell(after, O2);
+    expect(after.values[c2.iy * after.nx + c2.ix]).toBeLessThan(1e-6);
+  });
+
+  it("(c) a witness cone tightens a broad single-mode region toward the sector", () => {
+    // one broad origin (large σ) — a wide 95% region
+    const nodes = [
+      nodeToward(O1, 40, 900, 70, +20),
+      nodeToward(O1, 210, 900, 70, -15),
+    ];
+    const broad = computePosterior(nodes, { anchor: O1, resolution: 140 })!;
+    const areaBroad = candidateAreaM2(hdrRegions(broad));
+
+    // an observer 1.5 km south of O1 reporting first smoke due north (toward O1), tight cone
+    const observer = projectAlong(O1, O1, 180, 1500);
+    const cone = macro({
+      kind: "WITNESS_CONE",
+      geometry: { type: "Point", coordinates: [observer.lon, observer.lat] },
+      bearingDeg: 0,
+      spreadDeg: 12,
+    });
+    const informed = computePosterior(nodes, { anchor: O1, resolution: 140, constraints: [cone] })!;
+    const areaInformed = candidateAreaM2(hdrRegions(informed));
+
+    expect(areaInformed).toBeLessThan(areaBroad); // the prior honestly tightens the region
   });
 });
