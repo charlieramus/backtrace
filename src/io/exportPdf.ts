@@ -45,6 +45,43 @@ function hexToRgb(hex: string): RGB {
   return rgb(parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255);
 }
 
+// pdf-lib's standard fonts are WinAnsi (cp1252) encoded, so drawText THROWS on any
+// glyph outside that set — and free-text fields (incident name, investigator, notes)
+// can carry them. The macro demo's "GOA→SOA" is exactly this: the arrow (U+2192) has
+// no WinAnsi glyph, which crashed the whole report. Map the common typographic ones to
+// safe equivalents, then drop anything still outside WinAnsi, so the deliverable always
+// generates. (The em dash, bullet, degree, ± etc. ARE WinAnsi — those pass through.)
+const UNICODE_MAP: Record<string, string> = {
+  "→": "->", "←": "<-", "↔": "<->", "⇒": "=>", "⇐": "<=", "⇔": "<=>",
+  "↑": "^", "↓": "v", "≈": "~", "≤": "<=", "≥": ">=", "≠": "!=",
+  "−": "-", "‑": "-", "‒": "-", "–": "-", "—": "—", "…": "...", "•": "•",
+  "“": '"', "”": '"', "„": '"', "‘": "'", "’": "'", "‚": "'",
+};
+// Codepoints in cp1252's 0x80–0x9F band that WinAnsi CAN encode (kept as-is).
+const WINANSI_SPECIALS = new Set([
+  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160,
+  0x2039, 0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x017e, 0x0178,
+]);
+
+/** Make a string safe to draw with a WinAnsi standard font (never throws on export). */
+function winAnsi(s: string): string {
+  let out = "";
+  for (const ch of s) {
+    if (ch in UNICODE_MAP) {
+      out += UNICODE_MAP[ch];
+      continue;
+    }
+    const cp = ch.codePointAt(0) as number;
+    if ((cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) || WINANSI_SPECIALS.has(cp)) {
+      out += ch;
+    } else {
+      out += "?"; // unknown glyph — degrade rather than crash the report
+    }
+  }
+  return out;
+}
+
 function fmt(n: number): string {
   return Math.round(n).toLocaleString("en-US");
 }
@@ -67,7 +104,7 @@ class Cursor {
     this.y = startY;
   }
   text(s: string, size = 10, opts: { bold?: boolean; color?: RGB; x?: number } = {}): void {
-    this.page.drawText(s, {
+    this.page.drawText(winAnsi(s), {
       x: opts.x ?? MARGIN,
       y: this.y,
       size,
@@ -80,7 +117,7 @@ class Cursor {
     this.y -= (opts.gap ?? size + 4);
   }
   wrapped(s: string, size = 10, maxW = PAGE_W - 2 * MARGIN, color: RGB = INK): void {
-    const words = s.split(/\s+/);
+    const words = winAnsi(s).split(/\s+/); // sanitize before measuring so wrapping matches the drawn glyphs
     let cur = "";
     const flush = (): void => {
       if (cur) {
@@ -377,7 +414,7 @@ export async function buildPdf(
     ];
     const flagged = n.conflictsCluster === true;
     cells.forEach((cell, i) =>
-      page2.drawText(cell, { x: cols[i].x, y: c2.y, size: 8, font: reg, color: flagged ? rgb(0.7, 0.2, 0.1) : INK }),
+      page2.drawText(winAnsi(cell), { x: cols[i].x, y: c2.y, size: 8, font: reg, color: flagged ? rgb(0.7, 0.2, 0.1) : INK }),
     );
     if (flagged) page2.drawText("!", { x: PAGE_W - MARGIN - 10, y: c2.y, size: 8, font: bold, color: rgb(0.7, 0.2, 0.1) });
     c2.y -= 13;

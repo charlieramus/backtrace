@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { inflateSync } from "node:zlib";
 import { createStore } from "../store";
-import { loadMarshallDemo } from "../demo/presets";
+import { loadMarshallDemo, loadMarshallMacroDemo } from "../demo/presets";
 import { buildSolution } from "../geo/solution";
 import { buildPdf } from "./exportPdf";
 
@@ -72,6 +72,28 @@ describe("PDF report export", () => {
     expect(text).toContain("a mode of the 95% credible region");
     // never a bare labelled coordinate like "Point of Origin: lat,lon"
     expect(text).not.toMatch(/point of origin\s*:/i);
+  });
+
+  it("exports the macro-informed demo whose name has a non-WinAnsi glyph (GOA→SOA)", async () => {
+    // Regression: the "→" (U+2192) in the incident name has no WinAnsi glyph and used to
+    // make pdf-lib's drawText throw, killing the whole report. It must now generate, with
+    // the arrow degraded to the WinAnsi-safe "->".
+    const store = createStore();
+    loadMarshallMacroDemo(store);
+    const sol = buildSolution(store)!;
+    const bytes = await buildPdf(
+      sol,
+      store.activeNodes(),
+      store.getIncident(),
+      store.getInvestigator(),
+      "deadbeefdeadbeefcafe",
+      store.activeMacros(),
+    );
+    expect(asText(bytes.slice(0, 5))).toBe("%PDF-");
+    const text = pdfText(bytes);
+    expect(text).toContain("GOA->SOA"); // arrow safely transliterated in the drawn text
+    expect(text).not.toContain("→"); // the raw glyph never reaches a WinAnsi draw
+    expect(text).toContain("MACRO EVIDENCE (PRIORS)"); // macros still rendered
   });
 
   it("the methodology appendix states the known ~103° indicator error rate", async () => {
